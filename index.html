@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MurosPro - Análisis y Diseño Estructural de Muros en Voladizo (UNI / E.060 / ACI 318)</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- KaTeX para Fórmulas Matemáticas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos Personalizados de Ingeniería -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Three.js (vista 3D interactiva del detalle de armaduras) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-100 text-slate-900 antialiased">
+
+  <!-- Encabezado repetido, visible solo al imprimir la Memoria de Cálculo -->
+  <div id="print_running_header">MEMORIA DE CÁLCULO<br>ESTRUCTURAL</div>
+
+  <!-- ========================================================================= -->
+  <!-- HEADER / BARRA SUPERIOR -->
+  <!-- ========================================================================= -->
+  <header class="bg-white border-b border-slate-300 px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-50 shadow-sm">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-lg bg-indigo-700 text-white flex items-center justify-center shadow-md">
+        <i data-lucide="layers" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h1 class="text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+          MurosPro <span class="text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">UNI E.060 / ACI 318</span>
+        </h1>
+        <p class="text-[10px] text-slate-500 font-medium">Software Profesional de Análisis Geotécnico, Estabilidad Sísmica y Concreto Armado</p>
+      </div>
+    </div>
+
+    <!-- Acciones Rápidas y Casos Tipo -->
+    <div class="flex items-center flex-wrap gap-2">
+      <select id="preset_dropdown" class="text-xs bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold py-1.5 px-3 rounded text-slate-700 transition cursor-pointer" onchange="if(this.value) { document.querySelector(`[data-preset='${this.value}']`).click(); }">
+        <option value="diapos_uni_5m" selected>⭐ Caso Imagen Diapos UNI (H = 5.00m, Zona 1)</option>
+        <option value="excel_uni_6_5m">Proyecto Canoas de Punta Sal (H = 6.50m)</option>
+        <option value="muro_sismico_zona4">Muro H = 6.50m con Sismo Zona 4 (0.45g) y Dentellón</option>
+      </select>
+
+      <div class="hidden">
+        <button data-preset="diapos_uni_5m"></button>
+        <button data-preset="excel_uni_6_5m"></button>
+        <button data-preset="muro_sismico_zona4"></button>
+      </div>
+
+      <button id="btn_export_png" class="text-xs flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 font-semibold py-1.5 px-3 rounded transition" title="Exportar plano en imagen PNG">
+        <i data-lucide="image" class="w-3.5 h-3.5 text-slate-500"></i> PNG
+      </button>
+
+      <button id="btn_export_json" class="text-xs flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 font-semibold py-1.5 px-3 rounded transition" title="Guardar proyecto JSON">
+        <i data-lucide="download" class="w-3.5 h-3.5 text-slate-500"></i> Guardar
+      </button>
+
+      <button id="btn_print_report" class="text-xs flex items-center gap-1.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold py-1.5 px-3.5 rounded shadow-sm transition">
+        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir Memoria
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- CONTENIDO PRINCIPAL: PANEL DE ENTRADAS DE INGENIERÍA vs VISUALIZADOR -->
+  <!-- ========================================================================= -->
+  <main class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+    
+    <!-- ----------------------------------------------------------------------- -->
+    <!-- PANEL IZQUIERDO: FORMULARIO DE INGENIERÍA MEJORADO -->
+    <!-- ----------------------------------------------------------------------- -->
+    <aside class="w-full lg:w-[500px] xl:w-[530px] bg-slate-50/70 border-r border-slate-300 flex flex-col h-auto lg:h-[calc(100vh-57px)] overflow-y-auto">
+      
+      <!-- Barra de Navegación de Pestañas del Panel de Parámetros -->
+      <div class="p-2.5 border-b border-slate-300 bg-white sticky top-0 z-20 shadow-xs">
+        <div class="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-lg text-xs font-bold border border-slate-200">
+          <button data-input-tab="tab_excel_inputs" class="py-1.5 px-1 rounded-md bg-white text-indigo-700 shadow-sm transition flex items-center justify-center gap-1 text-[11px]">
+            <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i> Hoja Datos
+          </button>
+          <button data-input-tab="tab_geom_sliders" class="py-1.5 px-1 rounded-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1 text-[11px]">
+            <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i> Geometría
+          </button>
+          <button data-input-tab="tab_rebar_details" class="py-1.5 px-1 rounded-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1 text-[11px]">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Armaduras
+          </button>
+          <button data-input-tab="tab_advanced_opts" class="py-1.5 px-1 rounded-md text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1 text-[11px]">
+            <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Avanzado
+          </button>
+        </div>
+      </div>
+
+      <div class="p-3.5 space-y-3.5">
+
+        <!-- =================================================================== -->
+        <!-- PESTAÑA 1: HOJA DE DATOS CON DISEÑO INGENIERIL MODERNO -->
+        <!-- =================================================================== -->
+        <div id="tab_excel_inputs" class="input-group-panel space-y-3.5">
+
+          <!-- 1. Análisis de Muro de Contención en Voladizo (Geometría Base) -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title">
+                <span class="w-2 h-2 rounded-full bg-indigo-600"></span> Analisis de muro de contención en voladizo:
+              </span>
+              <button id="btn_predimensionar" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold transition flex items-center gap-1">
+                <i data-lucide="sparkles" class="w-3 h-3"></i> Predimensionar
+              </button>
+            </div>
+
+            <div class="eng-input-group">
+              <label class="eng-label">
+                <span>Altura del muro</span>
+                <span class="eng-symbol">(H):</span>
+              </label>
+              <div class="eng-cell-wrapper">
+                <input type="number" step="0.1" min="1.5" max="15.0" class="eng-cell-input" data-bind="geometry.H" data-sync="geometry.H">
+                <span class="eng-unit-badge">m</span>
+              </div>
+            </div>
+          </div>
+
+
+          <!-- 2. Datos del Suelo de Fundación (Terreno de Cimentación) -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title text-amber-950">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span> Datos del suelo de fundación:
+              </span>
+              <span class="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Apoyo Zapata</span>
+            </div>
+
+            <div class="space-y-1">
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Peso específico:</span>
+                  <span class="eng-symbol">(γf)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="10" min="1000" max="3000" class="eng-cell-input" data-bind="foundation.gamma_kgm3" data-sync="foundation.gamma_kgm3">
+                  <span class="eng-unit-badge">kg/cm2</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Profundidad de fundación:</span>
+                  <span class="eng-symbol">(Df)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="0.05" min="0.4" max="5.0" class="eng-cell-input" data-bind="geometry.Df" data-sync="geometry.Df">
+                  <span class="eng-unit-badge">m</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Angulo de fricción interna</span>
+                  <span class="eng-symbol">(φf)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="0.5" min="15" max="45" class="eng-cell-input" data-bind="foundation.phi" data-sync="foundation.phi">
+                  <span class="eng-unit-badge">°</span>
+                </div>
+              </div>
+
+              <!-- Cohesión (Celda Amarilla Técnica) -->
+              <div class="eng-input-group">
+                <label class="eng-label font-bold text-slate-900">
+                  <span>Cohesión</span>
+                  <span class="eng-symbol text-amber-700">(c')</span>
+                </label>
+                <div class="flex items-center gap-1.5">
+                  <button id="btn_calc_cohesion" type="button" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold transition whitespace-nowrap" title="Calcular c' = tan(φf)">
+                    c'=tan(φ)
+                  </button>
+                  <div class="eng-cell-wrapper eng-cell-yellow-wrapper">
+                    <input type="number" step="0.01" min="0.0" max="2.0" class="eng-cell-input font-bold" data-bind="foundation.c_kgcm2" data-sync="foundation.c_kgcm2">
+                    <span class="eng-unit-badge">kg/cm2</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Capacidad de Carga Última (Celda Amarilla Técnica) -->
+              <div class="eng-input-group">
+                <label class="eng-label font-bold text-slate-900">
+                  <span>Capacidad de carga admisible</span>
+                  <span class="eng-symbol text-amber-700">(σt)</span>
+                </label>
+                <div class="eng-cell-wrapper eng-cell-yellow-wrapper">
+                  <input type="number" step="0.1" min="0.5" max="15.0" class="eng-cell-input font-bold" data-bind="foundation.q_ult_kgcm2" data-sync="foundation.q_ult_kgcm2">
+                  <span class="eng-unit-badge">kg/cm2</span>
+                </div>
+              </div>
+
+              <!-- Fricción Suelo-Muro en la Base (Celda Amarilla Técnica) -->
+              <div class="eng-input-group">
+                <label class="eng-label font-bold text-slate-900">
+                  <span>Angulo de fricción suelo muro (base=f)</span>
+                </label>
+                <div class="eng-cell-wrapper eng-cell-yellow-wrapper">
+                  <select class="eng-cell-input font-bold text-center pr-2" data-bind="foundation.friction_ratio" data-sync="foundation.friction_ratio">
+                    <option value="0">0 (δ=0, sin fricción)</option>
+                    <option value="2/3">2/3</option>
+                    <option value="1/2">1/2</option>
+                    <option value="1.0">1.0 (tan φ)</option>
+                  </select>
+                  <span class="eng-unit-badge text-[10px]">tan δ</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+
+          <!-- 3. Datos del Suelo de Relleno -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title text-orange-950">
+                <span class="w-2 h-2 rounded-full bg-orange-500"></span> Datos del suelo de relleno
+              </span>
+              <span class="text-[10px] text-orange-700 font-semibold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">Espalda Muro</span>
+            </div>
+
+            <div class="space-y-1">
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Peso específico</span>
+                  <span class="eng-symbol">(γr)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="10" min="1000" max="3000" class="eng-cell-input" data-bind="backfill.gamma_kgm3" data-sync="backfill.gamma_kgm3">
+                  <span class="eng-unit-badge">kg/cm2</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Angulo de fricción interna</span>
+                  <span class="eng-symbol">(φr)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="0.5" min="15" max="45" class="eng-cell-input" data-bind="backfill.phi" data-sync="backfill.phi">
+                  <span class="eng-unit-badge">°</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Angulo de fricción suelo muro (pantalla)</span>
+                  <span class="eng-symbol">(δ)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="1" min="0" max="30" class="eng-cell-input" data-bind="backfill.delta" data-sync="backfill.delta">
+                  <span class="eng-unit-badge">°</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+
+          <!-- 4. Datos de los Materiales Utilizados -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title text-emerald-950">
+                <span class="w-2 h-2 rounded-full bg-emerald-600"></span> Datos de los materiales utilizados:
+              </span>
+              <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Estructura</span>
+            </div>
+
+            <div class="space-y-1">
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Resistencia del concreto</span>
+                  <span class="eng-symbol">(f'c)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="10" min="140" max="420" class="eng-cell-input font-bold" data-bind="materials.fc_kgcm2" data-sync="materials.fc_kgcm2">
+                  <span class="eng-unit-badge">kg/cm2</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Resistencia del acero</span>
+                  <span class="eng-symbol">(fy)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="100" min="2800" max="5000" class="eng-cell-input font-bold" data-bind="materials.fy_kgcm2" data-sync="materials.fy_kgcm2">
+                  <span class="eng-unit-badge">kg/cm2</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Peso espeífico del concreto</span>
+                  <span class="eng-symbol">(γc)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="50" min="2000" max="2600" class="eng-cell-input" data-bind="materials.gamma_c_kgm3" data-sync="materials.gamma_c_kgm3">
+                  <span class="eng-unit-badge">kg/cm2</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+
+          <!-- 5. Condiciones del Sitio y Cargas -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title text-slate-900">
+                <span class="w-2 h-2 rounded-full bg-slate-600"></span> Condiciones del sitio
+              </span>
+              <span class="text-[10px] text-slate-600 font-semibold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">Entorno y Sismo</span>
+            </div>
+
+            <div class="space-y-1">
+              
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Zona sísmica</span>
+                  <span class="eng-symbol">(Ao)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <select class="eng-cell-input font-bold text-center text-xs" data-bind="site_conditions.zona_sismica" data-sync="site_conditions.zona_sismica">
+                    <option value="zona_1">Zona 1 (0.10 g)</option>
+                    <option value="zona_2">Zona 2 (0.25 g)</option>
+                    <option value="zona_3">Zona 3 (0.35 g)</option>
+                    <option value="zona_4">Zona 4 (0.45 g)</option>
+                  </select>
+                  <span class="eng-unit-badge">g</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Sobrecarga vehicular</span>
+                  <span class="eng-symbol">(Hs)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="0.01" min="0.0" max="3.0" class="eng-cell-input" data-bind="site_conditions.hs_surcharge" data-sync="site_conditions.hs_surcharge">
+                  <span class="eng-unit-badge">m</span>
+                </div>
+              </div>
+
+              <!-- Opción: ingresar la sobrecarga (S/C) directamente y calcular Hs = (S/C)/γs -->
+              <div class="eng-input-group">
+                <label class="eng-label text-slate-500">
+                  <span>o Sobrecarga directa</span>
+                  <span class="eng-symbol">(S/C)</span>
+                </label>
+                <div class="flex items-center gap-1.5">
+                  <div class="eng-cell-wrapper">
+                    <input type="number" step="10" min="0" id="input_sc_direct" class="eng-cell-input" placeholder="0">
+                    <span class="eng-unit-badge">kg/m2</span>
+                  </div>
+                  <button id="btn_calc_hs_from_sc" type="button" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold transition whitespace-nowrap" title="Calcular Hs = (S/C) / γs">
+                    Hs=S/C÷γs
+                  </button>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Drenar agua de lluvia</span>
+                </label>
+                <div class="eng-cell-wrapper justify-center bg-slate-50">
+                  <label class="flex items-center space-x-1.5 text-xs text-slate-700 cursor-pointer py-1">
+                    <input type="checkbox" checked class="w-3.5 h-3.5 rounded text-indigo-600">
+                    <span class="font-semibold text-[11px]">Lloraderos (OK)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Angulo de inclinación interna</span>
+                  <span class="eng-symbol">(β)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="1" min="0" max="30" class="eng-cell-input" data-bind="backfill.beta" data-sync="backfill.beta">
+                  <span class="eng-unit-badge">°</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Inclinación de la cara interna del muro</span>
+                  <span class="eng-symbol">(θ)</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <input type="number" step="1" min="60" max="90" class="eng-cell-input" data-bind="site_conditions.wall_inner_angle" data-sync="site_conditions.wall_inner_angle">
+                  <span class="eng-unit-badge">°</span>
+                </div>
+              </div>
+
+              <div class="eng-input-group">
+                <label class="eng-label">
+                  <span>Dentellón:</span>
+                </label>
+                <div class="eng-cell-wrapper">
+                  <select class="eng-cell-input font-bold text-center text-xs" data-bind="site_conditions.dentellon_mode" data-sync="site_conditions.dentellon_mode">
+                    <option value="auto">cuando es necesario</option>
+                    <option value="si">Siempre (Sí)</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+
+        <!-- =================================================================== -->
+        <!-- PESTAÑA 2: GEOMETRÍA DETALLADA Y SLIDERS -->
+        <!-- =================================================================== -->
+        <div id="tab_geom_sliders" class="input-group-panel hidden space-y-4">
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title text-indigo-950">
+                <i data-lucide="maximize-2" class="w-4 h-4 text-indigo-600"></i> Control Gráfico de Dimensiones
+              </span>
+              <span class="text-[10px] text-slate-500 font-medium">Metros (m)</span>
+            </div>
+
+            <div class="space-y-3">
+              <!-- Altura H -->
+              <div class="space-y-1">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-700">
+                  <label>Altura total del muro (H)</label>
+                  <span class="font-mono text-indigo-600 font-bold" id="val_geom_H">5.00 m</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <input type="range" min="2.0" max="10.0" step="0.1" data-bind="geometry.H" data-sync="geometry.H" class="w-full accent-indigo-600 cursor-pointer">
+                  <input type="number" min="1.5" max="15.0" step="0.05" data-bind="geometry.H" data-sync="geometry.H" class="w-20 px-2 py-1 text-xs text-right font-mono font-bold border border-slate-300 rounded">
+                </div>
+              </div>
+
+              <!-- Ancho Base B -->
+              <div class="space-y-1">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-700">
+                  <label>Ancho total de zapata (B)</label>
+                  <span class="font-mono text-indigo-600 font-bold" id="val_geom_B">3.50 m</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <input type="range" min="1.0" max="10.0" step="0.05" data-bind="geometry.B" data-sync="geometry.B" class="w-full accent-indigo-600 cursor-pointer">
+                  <input type="number" min="0.8" max="15.0" step="0.05" data-bind="geometry.B" data-sync="geometry.B" class="w-20 px-2 py-1 text-xs text-right font-mono font-bold border border-slate-300 rounded">
+                </div>
+              </div>
+
+              <!-- Espesores zapata y puntera -->
+              <div class="grid grid-cols-2 gap-3 pt-2">
+                <div class="space-y-1">
+                  <label class="text-xs font-semibold text-slate-700">Espesor zapata (hz)</label>
+                  <input type="number" min="0.25" max="3.0" step="0.05" data-bind="geometry.hz" data-sync="geometry.hz" class="w-full px-2.5 py-1.5 text-xs font-mono font-bold border border-slate-300 rounded">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-xs font-semibold text-slate-700">Longitud punta (P)</label>
+                  <input type="number" min="0.20" max="4.0" step="0.05" data-bind="geometry.B_toe" data-sync="geometry.B_toe" class="w-full px-2.5 py-1.5 text-xs font-mono font-bold border border-slate-300 rounded">
+                </div>
+              </div>
+
+              <!-- Espesores vástago -->
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-1">
+                  <label class="text-xs font-semibold text-slate-700">Corona vástago (t1)</label>
+                  <input type="number" min="0.20" max="1.0" step="0.05" data-bind="geometry.b_top" data-sync="geometry.b_top" class="w-full px-2.5 py-1.5 text-xs font-mono font-bold border border-slate-300 rounded">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-xs font-semibold text-slate-700">Base vástago (t2)</label>
+                  <input type="number" min="0.25" max="2.0" step="0.05" data-bind="geometry.b_bot" data-sync="geometry.b_bot" class="w-full px-2.5 py-1.5 text-xs font-mono font-bold border border-slate-300 rounded">
+                </div>
+              </div>
+
+              <!-- Profundidad desplante Df -->
+              <div class="space-y-1 pt-1">
+                <label class="text-xs font-semibold text-slate-700">Profundidad de desplante (Df)</label>
+                <input type="number" min="0.5" max="4.0" step="0.1" data-bind="geometry.Df" data-sync="geometry.Df" class="w-full px-2.5 py-1.5 text-xs font-mono font-bold border border-slate-300 rounded">
+              </div>
+
+              <!-- Dentellón manual -->
+              <div class="pt-3 border-t border-slate-200 space-y-2">
+                <label class="flex items-center space-x-2 text-xs font-bold text-slate-800 cursor-pointer">
+                  <input type="checkbox" id="has_key_manual" data-bind="geometry.has_key" data-sync="geometry.has_key" class="w-4 h-4 rounded text-indigo-600">
+                  <span>Habilitar Dentellón / Tacón</span>
+                </label>
+
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="text-[11px] font-semibold text-slate-600">Prof. (m)</label>
+                    <input type="number" min="0.2" max="1.5" step="0.05" data-bind="geometry.key_depth" data-sync="geometry.key_depth" class="w-full px-2 py-1 text-xs font-mono border border-slate-300 rounded">
+                  </div>
+                  <div>
+                    <label class="text-[11px] font-semibold text-slate-600">Ancho (m)</label>
+                    <input type="number" min="0.2" max="1.5" step="0.05" data-bind="geometry.key_width" data-sync="geometry.key_width" class="w-full px-2 py-1 text-xs font-mono border border-slate-300 rounded">
+                  </div>
+                  <div>
+                    <label class="text-[11px] font-semibold text-slate-600">Pos. X (m)</label>
+                    <input type="number" min="0.4" max="5.0" step="0.05" data-bind="geometry.key_pos" data-sync="geometry.key_pos" class="w-full px-2 py-1 text-xs font-mono border border-slate-300 rounded">
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Verificación por corte en la base de la pantalla -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title text-indigo-950">
+                <i data-lucide="ruler" class="w-4 h-4 text-indigo-600"></i> Dimensionamiento y Corte en la Base de la Pantalla
+              </span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-3 text-xs">
+              <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                <p class="text-slate-500">Momento último Mu</p>
+                <p class="font-bold text-slate-800" id="stemchk_mu">-</p>
+              </div>
+              <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                <p class="text-slate-500">Peralte disponible d (con t2 actual)</p>
+                <p class="font-bold text-slate-800" id="stemchk_d">-</p>
+              </div>
+            </div>
+            <div class="p-2.5 rounded border mb-2 text-xs" id="stemchk_shear_box">
+              <p class="text-slate-500 mb-1">Verificación por corte, a distancia "d" de la base (E.060 / ACI 318):</p>
+              <div class="flex items-center justify-between">
+                <span class="font-mono" id="stemchk_shear_eq">Vu ≤ φVc</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold" id="stemchk_shear_badge">-</span>
+              </div>
+            </div>
+            <div class="p-2.5 rounded border border-slate-200 bg-slate-50 text-xs">
+              <p class="text-slate-500">Longitud de corte del acero vertical interior (Lc), desde la base</p>
+              <p class="font-bold text-slate-800" id="stemchk_lc">-</p>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- =================================================================== -->
+        <!-- PESTAÑA 3: SELECCIÓN DE ARMADURAS COMERCIALES Y RECUBRIMIENTOS -->
+        <!-- =================================================================== -->
+        <div id="tab_rebar_details" class="input-group-panel hidden space-y-4">
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title text-emerald-950">
+                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i> Diámetros Comerciales de Varillas
+              </span>
+            </div>
+
+            <div class="space-y-3">
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-700">Barra principal vástago (Pantalla)</label>
+                <select id="rebar_stem_id" data-bind="materials.rebar_stem_id" data-sync="materials.rebar_stem_id" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded">
+                </select>
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-700">Barra inferior punta (Zapata anterior)</label>
+                <select id="rebar_toe_id" data-bind="materials.rebar_toe_id" data-sync="materials.rebar_toe_id" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded">
+                </select>
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-700">Barra superior talón (Zapata posterior)</label>
+                <select id="rebar_heel_id" data-bind="materials.rebar_heel_id" data-sync="materials.rebar_heel_id" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded">
+                </select>
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-700">Barra de temperatura, retracción y montaje</label>
+                <select id="rebar_temp_id" data-bind="materials.rebar_temp_id" data-sync="materials.rebar_temp_id" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded">
+                </select>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-200 mt-3 space-y-2">
+              <h4 class="text-xs font-bold text-slate-900">Recubrimientos Libres (m)</h4>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-[11px] font-semibold text-slate-600">Recubrimiento Muro:</label>
+                  <input type="number" step="0.005" min="0.02" max="0.08" class="eng-cell-input border border-slate-300 rounded w-full text-right" data-bind="materials.cover_stem">
+                  <span class="text-[10px] text-slate-400">0.04 m (4.0 cm)</span>
+                </div>
+                <div>
+                  <label class="text-[11px] font-semibold text-slate-600">Recubrimiento Zapata:</label>
+                  <input type="number" step="0.005" min="0.04" max="0.10" class="eng-cell-input border border-slate-300 rounded w-full text-right" data-bind="materials.cover_footing">
+                  <span class="text-[10px] text-slate-400">0.075 m (7.5 cm)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- =================================================================== -->
+        <!-- PESTAÑA 4: OPCIONES AVANZADAS (NIVEL FREÁTICO Y NORMAS) -->
+        <!-- =================================================================== -->
+        <div id="tab_advanced_opts" class="input-group-panel hidden space-y-4">
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span class="eng-card-title text-slate-900">
+                <i data-lucide="settings" class="w-4 h-4 text-slate-600"></i> Parámetros Hidráulicos y Factores
+              </span>
+            </div>
+
+            <!-- Nivel Freático -->
+            <div class="space-y-3">
+              <label class="flex items-center space-x-2 text-xs font-bold text-slate-800 cursor-pointer">
+                <input type="checkbox" id="has_water_table" data-bind="loads.has_water_table" class="w-4 h-4 rounded text-indigo-600">
+                <span>Considerar Presencia de Nivel Freático</span>
+              </label>
+              <div id="water_params_container" class="hidden p-3 bg-sky-50 rounded border border-sky-200 space-y-1.5">
+                <label class="text-xs font-semibold text-sky-900">Altura del N.F. desde fondo de zapata hw (m)</label>
+                <input type="number" min="0.1" max="10.0" step="0.1" data-bind="loads.hw" class="w-full px-2.5 py-1 text-xs font-mono border border-sky-300 rounded">
+              </div>
+            </div>
+
+            <!-- Factores de seguridad mínimos -->
+            <div class="pt-3 border-t border-slate-200 mt-3 space-y-2">
+              <h4 class="text-xs font-bold text-slate-900">Factores de Seguridad Mínimos Exigidos</h4>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs font-semibold text-slate-700">FS Mín. Volcamiento:</label>
+                  <input type="number" min="1.2" max="3.0" step="0.05" data-bind="safety_req.fs_overturning" class="eng-cell-input border border-slate-300 rounded w-full text-right">
+                </div>
+                <div>
+                  <label class="text-xs font-semibold text-slate-700">FS Mín. Deslizamiento:</label>
+                  <input type="number" min="1.1" max="3.0" step="0.05" data-bind="safety_req.fs_sliding" class="eng-cell-input border border-slate-300 rounded w-full text-right">
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-2">
+              <label class="flex items-center space-x-2 text-xs font-semibold text-slate-800 cursor-pointer">
+                <input type="checkbox" data-bind="loads.consider_passive" class="w-4 h-4 rounded text-indigo-600">
+                <span>Considerar Empuje Pasivo Frontal</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+
+    <!-- ----------------------------------------------------------------------- -->
+    <!-- PANEL DERECHO: VISUALIZADOR INTERACTIVO, KPIS Y MEMORIA -->
+    <!-- ----------------------------------------------------------------------- -->
+    <section class="flex-1 flex flex-col h-auto lg:h-[calc(100vh-57px)] overflow-y-auto bg-slate-100 p-4 lg:p-5 space-y-3.5">
+      
+      <!-- Banner Estado Global -->
+      <div id="global_status_banner"></div>
+
+      <!-- Tarjetas KPI de Estado Rápido -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <div id="kpi_overturning"></div>
+        <div id="kpi_sliding"></div>
+        <div id="kpi_eccentricity"></div>
+        <div id="kpi_bearing"></div>
+      </div>
+
+      <!-- Contenedor Central de Pestañas -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden flex flex-col flex-1">
+        
+        <div class="tab-nav-header px-4 py-2 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+          
+          <!-- Pestañas Principales -->
+          <div class="flex space-x-2">
+            <button data-main-tab="visualizer_panel" class="py-1.5 px-3 text-xs font-bold border-b-2 border-indigo-600 text-indigo-600 transition flex items-center gap-1.5">
+              <i data-lucide="line-chart" class="w-3.5 h-3.5"></i> Visualizador 2D y Presiones
+            </button>
+            <button data-main-tab="forces_panel" class="py-1.5 px-3 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-1.5">
+              <i data-lucide="scale" class="w-3.5 h-3.5"></i> Tabla de Fuerzas y Momentos
+            </button>
+            <button data-main-tab="report_panel" class="py-1.5 px-3 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-1.5">
+              <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Memoria de Cálculo Completa
+            </button>
+          </div>
+
+          <!-- Modos de Visualización Gráfica -->
+          <div class="flex items-center space-x-1 bg-slate-200/80 p-0.5 rounded-lg text-xs font-bold">
+            <button data-view-mode="geometry" class="px-2.5 py-1 rounded bg-indigo-600 text-white shadow transition">
+              📐 Geometría y Cotas
+            </button>
+            <button data-view-mode="pressures" class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 hover:bg-white transition">
+              📉 Empujes y Presiones
+            </button>
+            <button data-view-mode="rebar" class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 hover:bg-white transition">
+              🏗️ Detalle Armaduras
+            </button>
+            <button data-view-mode="rebar3d" class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 hover:bg-white transition">
+              🧊 Detalle 3D
+            </button>
+            <button id="btn_reset_view" class="p-1 rounded bg-slate-100 text-slate-700 hover:bg-white transition" title="Centrar y reajustar vista">
+              <i data-lucide="refresh-ccw" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- CONTENIDO PESTAÑA 1: VISUALIZADOR 2D -->
+        <div id="visualizer_panel" class="tab-content-panel p-2 flex-1 flex flex-col min-h-[420px] relative">
+          <div id="canvas2d_container" class="canvas-container w-full h-[520px] lg:h-full rounded-lg border border-slate-200">
+            <canvas id="wallCanvas" class="w-full h-full block"></canvas>
+          </div>
+          <div id="canvas3d_container" class="canvas-container w-full h-[520px] lg:h-full rounded-lg border border-slate-200 hidden relative">
+            <div class="absolute top-2 left-2 z-10 bg-white/90 border border-slate-200 rounded-lg px-2.5 py-2 text-[10px] leading-relaxed shadow-sm">
+              <p class="font-bold text-slate-600 mb-1">Franja representativa — arrastra para rotar, rueda para zoom</p>
+              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#dc2626"></span>Asv Ci (interior)</p>
+              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#2563eb"></span>Asv Ce (exterior)</p>
+              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#16a34a"></span>Acero Punta</p>
+              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#9333ea"></span>Acero Talón</p>
+              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#f59e0b"></span>Transversal reparto</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- CONTENIDO PESTAÑA 2: TABLA DE FUERZAS Y MOMENTOS -->
+        <div id="forces_panel" class="tab-content-panel hidden p-6 space-y-6 overflow-y-auto flex-1 pb-16">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <i data-lucide="scale" class="w-4 h-4 text-indigo-600"></i> Desglose de Fuerzas Verticales Estabilizadoras (Σ Rv y Σ MR)
+              <span class="text-[10px] font-normal text-slate-400 normal-case">— Caso A: Tierra + Sobrecarga Vehicular (sin sismo)</span>
+            </h3>
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th class="py-2.5 px-3">Componente</th>
+                    <th class="py-2.5 px-3 text-right">Peso Vertical (W)</th>
+                    <th class="py-2.5 px-3 text-right">Brazo "X" (m)</th>
+                    <th class="py-2.5 px-3 text-right">Momento Estabilizador (MoFy)</th>
+                  </tr>
+                </thead>
+                <tbody id="table_weights_tbody"></tbody>
+                <tfoot class="bg-indigo-50/60 font-bold text-xs text-indigo-950 border-t-2 border-indigo-200">
+                  <tr>
+                    <td class="py-2.5 px-3">RESULTANTE TOTAL (Σ Rv y Σ MR)</td>
+                    <td class="py-2.5 px-3 text-right" id="total_weight_n">-</td>
+                    <td class="py-2.5 px-3 text-right">-</td>
+                    <td class="py-2.5 px-3 text-right" id="total_moment_mr">-</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <i data-lucide="arrow-right-left" class="w-4 h-4 text-rose-600"></i> Desglose de Empujes Horizontales Desestabilizadores (Σ Fh y Σ Mo)
+              <span class="text-[10px] font-normal text-slate-400 normal-case">— Caso A: Tierra + Sobrecarga Vehicular (sin sismo)</span>
+            </h3>
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th class="py-2.5 px-3">Empuje Lateral</th>
+                    <th class="py-2.5 px-3 text-right">Fuerza Horizontal (Fh)</th>
+                    <th class="py-2.5 px-3 text-right">Brazo "Y" (m)</th>
+                    <th class="py-2.5 px-3 text-right">Momento de Volteo (MFh)</th>
+                  </tr>
+                </thead>
+                <tbody id="table_pressures_tbody"></tbody>
+                <tfoot class="bg-rose-50/60 font-bold text-xs text-rose-950 border-t-2 border-rose-200">
+                  <tr>
+                    <td class="py-2.5 px-3">SUMATORIA TOTAL (Σ Fh y Σ Mo)</td>
+                    <td class="py-2.5 px-3 text-right" id="total_force_fh">-</td>
+                    <td class="py-2.5 px-3 text-right">-</td>
+                    <td class="py-2.5 px-3 text-right" id="total_moment_mo">-</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div id="case_b_panel" class="hidden">
+            <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <i data-lucide="waves" class="w-4 h-4 text-amber-600"></i> Verificación Sísmica — Caso B: Tierra + Sismo (sin sobrecarga vehicular)
+            </h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 text-xs">
+              <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                <p class="text-slate-500">FS Volcamiento</p>
+                <p class="font-bold text-slate-800" id="caseb_fsv">-</p>
+              </div>
+              <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                <p class="text-slate-500">FS Deslizamiento</p>
+                <p class="font-bold text-slate-800" id="caseb_fsd">-</p>
+              </div>
+              <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                <p class="text-slate-500">Excentricidad e_x</p>
+                <p class="font-bold text-slate-800" id="caseb_ex">-</p>
+              </div>
+              <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                <p class="text-slate-500">q_max (adm.)</p>
+                <p class="font-bold text-slate-800" id="caseb_qmax">-</p>
+              </div>
+            </div>
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th class="py-2.5 px-3">Empuje Lateral (Caso B)</th>
+                    <th class="py-2.5 px-3 text-right">Fuerza Horizontal (Fh)</th>
+                    <th class="py-2.5 px-3 text-right">Brazo "Y" (m)</th>
+                    <th class="py-2.5 px-3 text-right">Momento de Volteo (MFh)</th>
+                  </tr>
+                </thead>
+                <tbody id="table_pressures_caseb_tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Resumen Estructural -->
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <i data-lucide="cpu" class="w-4 h-4 text-emerald-600"></i> Resumen de Diseño Estructural y Armado (Norma E.060)
+            </h3>
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th class="py-2.5 px-3">Elemento</th>
+                    <th class="py-2.5 px-3 text-right">Mu Mayorado</th>
+                    <th class="py-2.5 px-3 text-right">Vu / φVc</th>
+                    <th class="py-2.5 px-3 text-right">As Requerido</th>
+                    <th class="py-2.5 px-3">Armadura Colocada</th>
+                    <th class="py-2.5 px-3 text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="table_structural_tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- CONTENIDO PESTAÑA 3: MEMORIA DE CÁLCULO COMPLETA -->
+        <div id="report_panel" class="tab-content-panel hidden p-8 bg-white overflow-y-auto flex-1 pb-20">
+          <div class="flex justify-end mb-2 no-print">
+            <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs font-bold">
+              <span class="px-2 text-slate-500">Unidades:</span>
+              <button id="btn_unit_kg" data-report-unit="kg" class="px-2.5 py-1 rounded bg-indigo-600 text-white shadow transition">kg</button>
+              <button id="btn_unit_tn" data-report-unit="Tn" class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 hover:bg-white transition">Tn</button>
+            </div>
+          </div>
+          <div id="calculation_report_content"></div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Script principal de inicio -->
+  <script type="module">
+    import { AppUIController } from './js/ui/uiController.js';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      window.app = new AppUIController();
+    });
+  </script>
+</body>
+</html>
