@@ -7,6 +7,7 @@
 import { DEFAULT_WALL_DATA, PRESET_PROJECTS, REBAR_TABLE, ZONAS_SISMICAS } from '../constants.js';
 import { calculateGeotechnicalStability, calculateDualCaseStability } from '../engine/geotechnical.js';
 import { calculateStructuralDesign } from '../engine/structural.js';
+import { calculateRebarSchedule } from '../engine/rebarSchedule.js';
 import { degToRad } from '../engine/soilPressures.js';
 import { WallCanvasRenderer } from '../visualizer/wallCanvas.js';
 import { WallRenderer3D } from '../visualizer/wallRenderer3D.js';
@@ -324,8 +325,11 @@ export class AppUIController {
           if (container3D) container3D.classList.remove('hidden');
           if (!this.renderer3D) {
             this.renderer3D = new WallRenderer3D(container3D);
+            this._setupRebar3DLegendToggles();
           }
           this.renderer3D.updateData(this.wallData, this.geoResults, this.structResults);
+          this._updateDentellonLegendRow();
+          this._updateRebar3DLegendDims();
           this.renderer3D.start();
         } else {
           if (this.renderer3D) this.renderer3D.stop();
@@ -457,6 +461,10 @@ export class AppUIController {
           if (tabId === 'visualizer_panel') {
             this.renderer.resizeCanvas();
             this.renderer.render();
+            const container3D = document.getElementById('canvas3d_container');
+            if (this.renderer3D && container3D && !container3D.classList.contains('hidden')) {
+              this.renderer3D.resize();
+            }
           }
         }
       });
@@ -573,6 +581,8 @@ export class AppUIController {
     this.renderer.updateData(this.wallData, this.geoResults, this.structResults);
     if (this.renderer3D) {
       this.renderer3D.updateData(this.wallData, this.geoResults, this.structResults);
+      this._updateDentellonLegendRow();
+      this._updateRebar3DLegendDims();
     }
 
     this.updateStatusBadges();
@@ -580,6 +590,70 @@ export class AppUIController {
     this.updateStructuralSummary();
     this.updateStemCheckPanel();
     this.generateCalculationReport();
+  }
+
+  /** Conecta los checkboxes de la leyenda del "Detalle 3D" para mostrar u
+   * ocultar cada tipo de acero de forma independiente. Se llama una sola
+   * vez, al crear el renderer3D (los checkboxes viven siempre en el DOM,
+   * solo el contenedor 3D se oculta/muestra). */
+  _setupRebar3DLegendToggles() {
+    const toggles = document.querySelectorAll('#rebar3d_legend .rebar-vis-toggle');
+    toggles.forEach((input) => {
+      input.addEventListener('change', () => {
+        const key = input.getAttribute('data-rebar-key');
+        if (this.renderer3D) this.renderer3D.setRebarTypeVisible(key, input.checked);
+      });
+    });
+
+    const realScaleToggle = document.getElementById('rebar3d_real_scale');
+    if (realScaleToggle) {
+      realScaleToggle.addEventListener('change', () => {
+        if (this.renderer3D) this.renderer3D.setRebarRealScale(realScaleToggle.checked);
+      });
+    }
+
+    const legendToggleBtn = document.getElementById('rebar3d_legend_toggle');
+    const legendBody = document.getElementById('rebar3d_legend_body');
+    if (legendToggleBtn && legendBody) {
+      legendToggleBtn.addEventListener('click', () => {
+        const collapsed = legendBody.classList.toggle('hidden');
+        legendToggleBtn.textContent = collapsed ? '▸' : '▾';
+      });
+    }
+  }
+
+  /** Muestra la fila de la leyenda del acero vertical del dentellón solo
+   * cuando el dentellón está habilitado (si no, ese grupo de varillas no
+   * existe en el 3D y el checkbox no tendría nada que ocultar). */
+  _updateDentellonLegendRow() {
+    const hasKey = !!this.wallData?.geometry?.has_key;
+    document.querySelectorAll('.dentellon-legend-row').forEach((row) => {
+      row.classList.toggle('hidden', !hasKey);
+    });
+  }
+
+  /** Escribe el diámetro y espaciamiento real de cada tipo de acero al
+   * costado de su fila en la leyenda del "Detalle 3D", tomando los mismos
+   * valores ya calculados por el motor estructural (sin recalcular nada). */
+  _updateRebar3DLegendDims() {
+    const str = this.structResults;
+    if (!str) return;
+    const dims = {
+      asvci: `${str.stem.rebar.name} @ ${str.stem.spacing} cm`,
+      asvciBaston: `${str.stem.rebar.name} @ ${str.stem.spacing} cm (hasta Lc)`,
+      asvce: `${str.stem.rebarTemp.name} @ ${str.stem.spacing_vert_ext_inferior} cm`,
+      ashce: `${str.stem.rebarTemp.name} @ ${str.stem.sp_ce_inferior} cm`,
+      ashci: `${str.stem.rebar.name} @ ${str.stem.sp_ci_inferior} cm`,
+      puntaMain: `${str.toe.rebar.name} @ ${str.toe.spacing} cm`,
+      talonMain: `${str.heel.rebar.name} @ ${str.heel.spacing} cm`,
+      transversal: `${str.toe.rebarTemp.name} @ ${str.toe.spacing_trans} cm`,
+      dentellonVert: `Ø 3/4" (19.1 mm) @ 15 cm`,
+      dentellonHoriz: `${str.toe.rebarTemp.name} @ ${str.toe.spacing_trans} cm`
+    };
+    document.querySelectorAll('.rebar-dim-text').forEach((span) => {
+      const key = span.getAttribute('data-dim-key');
+      if (dims[key]) span.textContent = dims[key];
+    });
   }
 
   updateStemCheckPanel() {
@@ -2030,9 +2104,20 @@ export class AppUIController {
               </select>`;
           };
 
-          const spacingBlock = (rebar, As_design_cm2m, spacing_final_cm, resultLabel, materialsKey) => {
+          // Redondea a incrementos de 0.5 cm (0.005 m) y formatea sin ceros
+          // finales innecesarios (0.149→"0.15", 0.1249→"0.125").
+          const fmtSpacingM = (value_m) => {
+            const rounded = Math.round(value_m / 0.005) * 0.005;
+            let s = rounded.toFixed(3);
+            if (s.endsWith('0')) s = s.slice(0, -1);
+            return s;
+          };
+
+          const spacingBlock = (rebar, As_design_cm2m, spacing_final_cm, resultLabel, materialsKey, spacingKey) => {
             const Scalc_m = (rebar.area_cm2 * 100 / As_design_cm2m) / 100;
-            const Sfinal_m = spacing_final_cm / 100;
+            const overrideCm = spacingKey ? w.materials[spacingKey] : null;
+            const hasOverride = overrideCm !== null && overrideCm !== undefined && overrideCm !== '';
+            const Sfinal_cm = hasOverride ? Number(overrideCm) : spacing_final_cm;
             return `
               <p class="font-bold text-slate-700 mb-1 flex items-center gap-2">Varilla a usar:
                 ${materialsKey
@@ -2042,15 +2127,19 @@ export class AppUIController {
               <table class="w-full text-xs border border-slate-200 rounded overflow-hidden mb-1.5">
                 <tbody>
                   <tr class="border-b border-slate-100"><td class="py-1 px-2 font-bold text-slate-600">A<sub>varilla</sub></td><td class="py-1 px-2 text-right font-mono">${rebar.area_cm2.toFixed(2)} cm²</td></tr>
-                  <tr class="border-b border-slate-100"><td class="py-1 px-2 font-bold text-slate-600">S calc</td><td class="py-1 px-2 text-right font-mono">${Scalc_m.toFixed(3)} m</td></tr>
-                  <tr class="bg-indigo-50"><td class="py-1 px-2 font-bold text-indigo-900">S final</td><td class="py-1 px-2 text-right font-mono font-bold text-indigo-900">${Sfinal_m.toFixed(3)} m</td></tr>
+                  <tr class="border-b border-slate-100"><td class="py-1 px-2 font-bold text-slate-600">S calc</td><td class="py-1 px-2 text-right font-mono">${fmtSpacingM(Scalc_m)} m</td></tr>
+                  <tr class="bg-indigo-50"><td class="py-1 px-2 font-bold text-indigo-900">S final</td><td class="py-1 px-2 text-right font-mono font-bold text-indigo-900">
+                    ${spacingKey
+                      ? `<input type="number" step="0.5" min="5" data-bind="materials.${spacingKey}" data-sync="materials.${spacingKey}" value="${Sfinal_cm}" class="w-16 text-right font-mono font-bold text-indigo-900 border border-indigo-300 rounded px-1 no-print bg-white"> cm`
+                      : `${(Sfinal_cm / 100).toFixed(3)} m`}
+                  </td></tr>
                 </tbody>
               </table>
               <div class="rounded border text-xs font-bold text-center py-1 mb-2 bg-emerald-50 border-emerald-300 text-emerald-700">
                 Verif. S final ≤ S calc — OK
               </div>
               <div class="rounded border border-amber-300 bg-amber-50 text-xs font-bold text-center py-1.5 text-slate-800">
-                ${resultLabel} = 1 ø ${rebar.inches || rebar.name} @ ${spacing_final_cm.toFixed(1)} cm
+                ${resultLabel} = 1 ø ${rebar.inches || rebar.name} @ ${Sfinal_cm.toFixed(1)} cm
               </div>`;
           };
 
@@ -2069,7 +2158,9 @@ export class AppUIController {
             const zapLeftX = frontBotX - 35, zapRightX = backX + 35;
 
             const isCi = mode === 'ci';
-            const barTopY = isCi ? zapY - (str.stem.Lc_usar / str.stem.hp) * stemH : topY;
+            const yAtHeight = (h) => zapY - (h / str.stem.hp) * stemH;
+            const cut1Y = yAtHeight(str.stem.Lc_usar);
+            const barTopY = isCi ? cut1Y : topY;
 
             const commonMarkup = `
                 <!-- Contorno del muro (vástago + zapata) -->
@@ -2088,41 +2179,56 @@ export class AppUIController {
                 <text x="${backX - 24}" y="${(topY + zapY) / 2}" font-size="10" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${backX - 24} ${(topY + zapY) / 2})">Cara Interior</text>`;
 
             if (isCi) {
-              const barX = backX - 6;
+              const barX = backX - 6;   // varilla continua: llega hasta la corona, gancho arriba y abajo
+              const barXc = barX - 10;  // varilla de tramo 1: gancho en la base, se corta (sin gancho) en Lc
+              const hookYContinua = zapBotY - 6;   // gancho más abajo (más cerca de la base real)
+              const hookYTramo1 = zapBotY - 18;    // gancho más arriba, para que no se crucen
               return `
               <svg viewBox="0 0 ${Wpx} ${Hpx}" style="max-width:320px; width:100%;">
                 ${commonMarkup}
-                <!-- Varilla principal (gancho en la base, dentro de la zapata) hasta el corte en Lc -->
-                <path d="M ${barX} ${barTopY} L ${barX} ${zapBotY - 10} L ${barX + 10} ${zapBotY - 10}" fill="none" stroke="#2563eb" stroke-width="2.5"/>
-                <!-- Continúa el acero mínimo (más delgado) desde el corte hasta la corona -->
-                <line x1="${barX}" y1="${topY + 4}" x2="${barX}" y2="${barTopY}" stroke="#60a5fa" stroke-width="1.2"/>
+                <!-- Varilla que continúa hasta la corona: gancho a 90° en la base (dentro de
+                     la zapata) y gancho a 90° en la corona. Línea sólida de un solo tramo
+                     físico — el corte por economía es otra varilla más corta (abajo). Su
+                     gancho va más abajo (más cerca de la base real) que el de tramo 1. -->
+                <path d="M ${barX - 10} ${topY + 4} L ${barX} ${topY + 4} L ${barX} ${hookYContinua} L ${barX - 10} ${hookYContinua}"
+                  fill="none" stroke="#dc2626" stroke-width="2.6"/>
+                <!-- Varilla de tramo 1: gancho en la base, se corta (sin gancho) en Lc — su
+                     gancho queda más arriba que el de la varilla continua -->
+                <path d="M ${barXc} ${cut1Y} L ${barXc} ${hookYTramo1} L ${barXc + 10} ${hookYTramo1}"
+                  fill="none" stroke="#d946ef" stroke-width="2.6"/>
 
-                <!-- Flechas + etiqueta -->
+                <!-- Etiqueta -->
                 <text x="${barX + 60}" y="${topY + 24}" font-size="12" font-weight="700" fill="#2563eb" text-anchor="start">Asv Ci</text>
                 <line x1="${barX + 55}" y1="${topY + 20}" x2="${barX + 4}" y2="${topY + 16}" stroke="#2563eb" stroke-width="1.2"/>
-                <line x1="${barX + 55}" y1="${topY + 20}" x2="${barX + 4}" y2="${barTopY}" stroke="#2563eb" stroke-width="1.2"/>
+                <line x1="${barX + 55}" y1="${topY + 20}" x2="${barXc + 4}" y2="${(cut1Y + hookYTramo1) / 2}" stroke="#2563eb" stroke-width="1.2"/>
                 <polygon points="${barX + 6},${topY + 13} ${barX + 6},${topY + 19} ${barX},${topY + 16}" fill="#2563eb"/>
-                <polygon points="${barX + 6},${barTopY - 3} ${barX + 6},${barTopY + 3} ${barX},${barTopY}" fill="#2563eb"/>
 
                 <!-- Cota Lc -->
-                <line x1="${zapRightX + 20}" y1="${zapY}" x2="${zapRightX + 20}" y2="${barTopY}" stroke="#4338ca" stroke-width="1.3"/>
+                <line x1="${zapRightX + 20}" y1="${zapY}" x2="${zapRightX + 20}" y2="${cut1Y}" stroke="#4338ca" stroke-width="1.3"/>
                 <line x1="${zapRightX + 14}" y1="${zapY}" x2="${zapRightX + 26}" y2="${zapY}" stroke="#4338ca" stroke-width="1.3"/>
-                <line x1="${zapRightX + 14}" y1="${barTopY}" x2="${zapRightX + 26}" y2="${barTopY}" stroke="#4338ca" stroke-width="1.3"/>
-                <text x="${zapRightX + 30}" y="${(zapY + barTopY) / 2 + 4}" font-size="11" font-weight="700" fill="#4338ca" text-anchor="start">Lc = ${str.stem.Lc_usar.toFixed(2)} m</text>
+                <line x1="${zapRightX + 14}" y1="${cut1Y}" x2="${zapRightX + 26}" y2="${cut1Y}" stroke="#4338ca" stroke-width="1.3"/>
+                <text x="${zapRightX + 30}" y="${(zapY + cut1Y) / 2 + 4}" font-size="11" font-weight="700" fill="#4338ca" text-anchor="start">Lc = ${str.stem.Lc_usar.toFixed(2)} m</text>
               </svg>`;
             }
 
             // Cara exterior: la varilla sigue el batir del frente (diagonal),
-            // continua desde la zapata hasta la corona, sin corte.
+            // en los mismos 2 tramos (espaciamiento más amplio hacia la
+            // corona), continua desde la zapata hasta la corona.
             const offset = 8;
-            const barBotX = frontBotX + offset, barTopX = frontTopX + offset;
+            const xAtY = (y) => {
+              const t = (y - topY) / (zapY - topY); // 0 en la corona, 1 en la base
+              return frontTopX + (frontBotX - frontTopX) * t + offset;
+            };
+            const barBotX = xAtY(zapY), barTopX = xAtY(topY);
             return `
               <svg viewBox="0 0 ${Wpx} ${Hpx}" style="max-width:320px; width:100%;">
                 ${commonMarkup}
-                <!-- Varilla (gancho en la base, hacia afuera de la zapata) siguiendo el batir hasta la corona -->
-                <path d="M ${barBotX + 10} ${zapBotY - 10} L ${barBotX} ${zapBotY - 10} L ${barTopX} ${topY + 4}" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+                <!-- Varilla única, continua desde la base hasta la corona, siguiendo el
+                     batido de la cara exterior: gancho a 90° en la base (dentro de la
+                     zapata) y gancho a 90° en la corona. -->
+                <path d="M ${barBotX + 10} ${zapBotY - 10} L ${barBotX} ${zapBotY - 10} L ${barTopX} ${topY + 4} L ${barTopX + 10} ${topY + 4}" fill="none" stroke="#dc2626" stroke-width="2.6"/>
 
-                <!-- Flecha + etiqueta -->
+                <!-- Etiqueta -->
                 <text x="${barBotX - 65}" y="${(topY + zapY) / 2 - 20}" font-size="12" font-weight="700" fill="#2563eb" text-anchor="end">Asv Ce</text>
                 <line x1="${barBotX - 60}" y1="${(topY + zapY) / 2 - 20}" x2="${(barBotX + barTopX) / 2 - 4}" y2="${(topY + zapY) / 2 - 20}" stroke="#2563eb" stroke-width="1.2"/>
                 <polygon points="${(barBotX + barTopX) / 2 - 2},${(topY + zapY) / 2 - 23} ${(barBotX + barTopX) / 2 - 2},${(topY + zapY) / 2 - 17} ${(barBotX + barTopX) / 2 + 4},${(topY + zapY) / 2 - 20}" fill="#2563eb"/>
@@ -2178,18 +2284,16 @@ export class AppUIController {
               <div class="p-2 bg-white rounded border border-slate-200 text-center">a = d − √(d² − 2Mu / (ø·0.85·f'c·b))</div>
               <div class="p-2 bg-white rounded border border-slate-200 text-center">As = Mu / (ø·fy·(d − a/2))</div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-center mb-3">
               <div class="max-w-xs">
-                ${spacingBlock(str.stem.rebar, str.stem.As_design, str.stem.spacing, 'Asv<sub>ci</sub>', 'rebar_stem_id')}
+                ${spacingBlock(str.stem.rebar, str.stem.As_design, str.stem.spacing, 'Asv<sub>ci</sub>', 'rebar_stem_id', 'spacing_stem_override_cm')}
               </div>
               <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2">
                 ${rebarDiagram('ci')}
               </div>
             </div>
-          </div>
 
-          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3 avoid-break">
-            <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">B. Cálculo de la Longitud Crítica (Lc)</h4>
+            <p class="font-bold text-emerald-700 italic mb-2 text-sm">Cálculo de la longitud crítica (Lc):</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-2">
               <table class="w-full border border-slate-200 rounded overflow-hidden self-start">
                 <tbody>
@@ -2223,22 +2327,26 @@ export class AppUIController {
           </div>
 
           <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3 avoid-break">
-            <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">C. Cálculo de Acero Vertical en Cara Exterior (Asv<sub>ce</sub>)</h4>
+            <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">B. Cálculo de Acero Vertical en Cara Exterior (Asv<sub>ce</sub>)</h4>
+            <p class="text-[11px] text-slate-500 mb-2">
+              Al ser acero mínimo (0.0015·b·t), se calcula con el espesor real en la base del
+              vástago (el más grueso) y se usa el mismo espaciamiento en toda la altura, sin
+              economizar hacia la corona.
+            </p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-2">
               <table class="w-full border border-slate-200 rounded overflow-hidden self-start">
                 <tbody>
                   <tr class="border-b border-slate-100"><td class="py-1 px-2 font-bold text-slate-600">ρmin</td><td class="py-1 px-2 text-right font-mono">0.0015</td></tr>
-                  <tr class="border-b border-slate-100"><td class="py-1 px-2 font-bold text-slate-600">d</td><td class="py-1 px-2 text-right font-mono">${(str.stem.d * 100).toFixed(2)} cm</td></tr>
                   <tr><td class="py-1 px-2 font-bold text-slate-600">b</td><td class="py-1 px-2 text-right font-mono">100.00 cm</td></tr>
                 </tbody>
               </table>
               <div class="rounded border border-indigo-200 bg-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-900">
-                Asv<sub>ce</sub> = ${str.stem.As_vert_ext.toFixed(2)} cm²
+                Asv<sub>ce</sub> = ${str.stem.As_vert_ext_inferior.toFixed(2)} cm²
               </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
               <div class="max-w-xs">
-                ${spacingBlock(str.stem.rebarTemp, str.stem.As_vert_ext, str.stem.spacing_vert_ext, 'Asv<sub>ce</sub>', 'rebar_temp_id')}
+                ${spacingBlock(str.stem.rebarTemp, str.stem.As_vert_ext_inferior, str.stem.spacing_vert_ext_inferior, 'Asv<sub>ce</sub>', 'rebar_temp_id', 'spacing_vert_ext_override_cm')}
               </div>
               <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2">
                 ${rebarDiagram('ce')}
@@ -2247,7 +2355,7 @@ export class AppUIController {
           </div>
 
           <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3 avoid-break">
-            <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">D. Cálculo de Acero Horizontal (Ash)</h4>
+            <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">C. Cálculo de Acero Horizontal (Ash)</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-3">
               <div class="p-2 bg-amber-50 rounded border border-amber-300 flex items-center justify-center gap-2 font-bold">Diámetro del refuerzo: ${rebarSelectHtml('rebar_temp_id')}</div>
               <div class="p-2 bg-white rounded border border-slate-200 text-center">ρmin = ${str.stem.rho_h_min.toFixed(4)} <span class="text-slate-400 italic text-[10px]">(E.060 ítem 14.3.1${str.stem.rho_h_min > 0.002 ? ', Ø > 5/8"' : ''})</span></div>
@@ -2293,12 +2401,12 @@ export class AppUIController {
               <div>
                 <p class="font-bold text-slate-700 mb-1 underline">Cara Exterior (Ash = 2/3 Ast)</p>
                 <div class="rounded border border-indigo-200 bg-indigo-50 text-center font-bold text-indigo-900 py-1 mb-1.5">Ast<sub>ce</sub> = ${str.stem.Ash_ce_inferior.toFixed(2)} cm²</div>
-                ${spacingBlock(str.stem.rebarTemp, str.stem.Ash_ce_inferior, str.stem.sp_ce_inferior, 'Ash<sub>ce</sub>', 'rebar_temp_id')}
+                ${spacingBlock(str.stem.rebarTempCe, str.stem.Ash_ce_inferior, str.stem.sp_ce_inferior, 'Ash<sub>ce</sub>', 'rebar_temp_ce_id', 'sp_ce_inferior_override_cm')}
               </div>
               <div>
                 <p class="font-bold text-slate-700 mb-1 underline">Cara Interior (Ash = 1/3 Ast)</p>
                 <div class="rounded border border-indigo-200 bg-indigo-50 text-center font-bold text-indigo-900 py-1 mb-1.5">Ast<sub>ci</sub> = ${str.stem.Ash_ci_inferior.toFixed(2)} cm²</div>
-                ${spacingBlock(str.stem.rebarTemp, str.stem.Ash_ci_inferior, str.stem.sp_ci_inferior, 'Ash<sub>ci</sub>', 'rebar_temp_id')}
+                ${spacingBlock(str.stem.rebarTempCi, str.stem.Ash_ci_inferior, str.stem.sp_ci_inferior, 'Ash<sub>ci</sub>', 'rebar_temp_ci_id', 'sp_ci_inferior_override_cm')}
               </div>
             </div>
 
@@ -2347,18 +2455,18 @@ export class AppUIController {
               <div>
                 <p class="font-bold text-slate-700 mb-1 underline">Cara Exterior (Ash = 2/3 Ast)</p>
                 <div class="rounded border border-indigo-200 bg-indigo-50 text-center font-bold text-indigo-900 py-1 mb-1.5">Ast<sub>ce</sub> = ${str.stem.Ash_ce_superior.toFixed(2)} cm²</div>
-                ${spacingBlock(str.stem.rebarTemp, str.stem.Ash_ce_superior, str.stem.sp_ce_superior, 'Ash<sub>ce</sub>', 'rebar_temp_id')}
+                ${spacingBlock(str.stem.rebarTempCe, str.stem.Ash_ce_superior, str.stem.sp_ce_superior, 'Ash<sub>ce</sub>', 'rebar_temp_ce_id', 'sp_ce_superior_override_cm')}
               </div>
               <div>
                 <p class="font-bold text-slate-700 mb-1 underline">Cara Interior (Ash = 1/3 Ast)</p>
                 <div class="rounded border border-indigo-200 bg-indigo-50 text-center font-bold text-indigo-900 py-1 mb-1.5">Ast<sub>ci</sub> = ${str.stem.Ash_ci_superior.toFixed(2)} cm²</div>
-                ${spacingBlock(str.stem.rebarTemp, str.stem.Ash_ci_superior, str.stem.sp_ci_superior, 'Ash<sub>ci</sub>', 'rebar_temp_id')}
+                ${spacingBlock(str.stem.rebarTempCi, str.stem.Ash_ci_superior, str.stem.sp_ci_superior, 'Ash<sub>ci</sub>', 'rebar_temp_ci_id', 'sp_ci_superior_override_cm')}
               </div>
             </div>
           </div>
 
           ${(() => {
-            const flexBlock = (member, title, resultLabel, footingLabel, rebarKey) => `
+            const flexBlock = (member, title, resultLabel, footingLabel, rebarKey, spacingKey) => `
             <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3 avoid-break">
               <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">${title}</h4>
               <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs mb-2">
@@ -2401,7 +2509,7 @@ export class AppUIController {
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
                 <div class="max-w-xs">
-                  ${spacingBlock(member.rebar, member.As_design, member.spacing, resultLabel, rebarKey)}
+                  ${spacingBlock(member.rebar, member.As_design, member.spacing, resultLabel, rebarKey, spacingKey)}
                 </div>
                 <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2">
                   ${footingLabelDiagram(footingLabel)}
@@ -2413,28 +2521,42 @@ export class AppUIController {
               const Wpx = 300, Hpx = 100;
               const rx0 = 20, rx1 = 280, ry0 = 30, ry1 = 80;
               const notchCx = (rx0 + rx1) / 2, notchW = 40;
+              const breakY = ry0 - 15;
+              // La varilla principal va abajo en la punta (tracción en la
+              // cara inferior) y arriba en el talón (tracción en la cara
+              // superior), con gancho a 90° en ambos extremos laterales
+              // doblando siempre hacia el interior de la zapata — es la
+              // varilla real, no una simple cota.
+              const isPunta = label === 'Punta';
+              const barY = isPunta ? ry1 - 10 : ry0 + 10;
+              const hookH = 10;
+              const hookSign = isPunta ? -1 : 1; // dobla hacia arriba en la punta, hacia abajo en el talón
+              const labelY = isPunta ? barY + hookH * hookSign - 8 : barY + hookH * hookSign + 16;
+              // Mismo color que su acero real: verde para la Punta (acero
+              // inferior de zapata), morado para el Talón (acero superior).
+              const barColor = isPunta ? '#00b140' : '#9333ea';
               return `
                 <svg viewBox="0 0 ${Wpx} ${Hpx}" style="max-width:280px; width:100%;">
-                  <polygon points="${rx0},${ry1} ${rx0},${ry0} ${notchCx - notchW / 2},${ry0} ${notchCx - notchW / 2},${ry0 - 15} ${notchCx + notchW / 2},${ry0 - 15} ${notchCx + notchW / 2},${ry0} ${rx1},${ry0} ${rx1},${ry1}"
+                  <polygon points="${rx0},${ry1} ${rx0},${ry0} ${notchCx - notchW / 2},${ry0} ${notchCx - notchW / 2},${breakY} ${notchCx + notchW / 2},${breakY} ${notchCx + notchW / 2},${ry0} ${rx1},${ry0} ${rx1},${ry1}"
                     fill="#f8fafc" stroke="#0f172a" stroke-width="2"/>
-                  <!-- Quiebre (el vástago continúa fuera de esta vista) -->
-                  <line x1="${notchCx - notchW / 2 - 25}" y1="${ry0 - 15}" x2="${notchCx - notchW / 2 - 4}" y2="${ry0 - 15}" stroke="#94a3b8" stroke-width="1.3"/>
-                  <path d="M ${notchCx - notchW / 2 - 4} ${ry0 - 15} l 5,-5 l 7,10 l 5,-5" fill="none" stroke="#94a3b8" stroke-width="1.3"/>
-                  <line x1="${notchCx + notchW / 2 + 4}" y1="${ry0 - 15}" x2="${notchCx + notchW / 2 + 25}" y2="${ry0 - 15}" stroke="#94a3b8" stroke-width="1.3"/>
-                  <!-- Cota con flechas -->
-                  <line x1="${rx0 + 8}" y1="${ry0 + 15}" x2="${rx1 - 8}" y2="${ry0 + 15}" stroke="#2563eb" stroke-width="1.3"/>
-                  <polygon points="${rx0 + 8},${ry0 + 15} ${rx0 + 16},${ry0 + 11} ${rx0 + 16},${ry0 + 19}" fill="#2563eb"/>
-                  <polygon points="${rx1 - 8},${ry0 + 15} ${rx1 - 16},${ry0 + 11} ${rx1 - 16},${ry0 + 19}" fill="#2563eb"/>
-                  <text x="${rx1 - 14}" y="${ry0 + 12}" font-size="12" font-weight="700" fill="#2563eb" text-anchor="end">${label}</text>
+                  <!-- Quiebre (el vástago continúa fuera de esta vista): línea recta con un
+                       zigzag centrado sobre el saliente, convención estándar de plano -->
+                  <line x1="${notchCx - notchW / 2 - 30}" y1="${breakY}" x2="${notchCx - notchW / 2 - 6}" y2="${breakY}" stroke="#334155" stroke-width="1.3"/>
+                  <path d="M ${notchCx - notchW / 2 - 6} ${breakY} l 4,-6 l 8,12 l 8,-12 l 4,6" fill="none" stroke="#334155" stroke-width="1.3"/>
+                  <line x1="${notchCx + notchW / 2 + 6}" y1="${breakY}" x2="${notchCx + notchW / 2 + 30}" y2="${breakY}" stroke="#334155" stroke-width="1.3"/>
+                  <!-- Varilla principal con gancho a 90° en ambos extremos -->
+                  <path d="M ${rx0 + 6},${barY + hookH * hookSign} L ${rx0 + 6},${barY} L ${rx1 - 6},${barY} L ${rx1 - 6},${barY + hookH * hookSign}"
+                    fill="none" stroke="${barColor}" stroke-width="2.2"/>
+                  <text x="${rx0 + 14}" y="${labelY}" font-size="12" font-weight="700" fill="${barColor}" text-anchor="start">${label}</text>
                 </svg>`;
             };
 
             return `
-          ${flexBlock(str.toe, 'E. Cálculo de Acero Principal en la Punta (As)', 'As', 'Punta', 'rebar_toe_id')}
-          ${flexBlock(str.heel, 'F. Cálculo de Acero Principal en el Talón (As)', 'As', 'Talón', 'rebar_heel_id')}
+          ${flexBlock(str.toe, 'D. Cálculo de Acero Principal en la Punta (As)', 'As', 'Punta', 'rebar_toe_id', 'spacing_toe_override_cm')}
+          ${flexBlock(str.heel, 'E. Cálculo de Acero Principal en el Talón (As)', 'As', 'Talón', 'rebar_heel_id', 'spacing_heel_override_cm')}
 
           <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 avoid-break">
-            <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">G. Acero Transversal de Reparto (Punta, Talón${w.geometry.has_key ? ' y Dentellón' : ''})</h4>
+            <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">F. Acero Transversal de Reparto (Punta, Talón${w.geometry.has_key ? ' y Dentellón' : ''})</h4>
             <p class="text-[11px] text-slate-500 mb-2">
               Varilla mínima de reparto (E.060 ítem 7.12.2, ρ = 0.0018), continua entre la punta y el
               talón${w.geometry.has_key ? ', prolongándose también hacia el dentellón' : ''}.
@@ -2449,10 +2571,102 @@ export class AppUIController {
               </table>
               <div class="rounded border border-indigo-200 bg-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-900">Ast = ${str.toe.As_trans.toFixed(2)} cm²</div>
             </div>
-            <div class="max-w-xs">
-              ${spacingBlock(str.toe.rebarTemp, str.toe.As_trans, str.toe.spacing_trans, 'Ast', 'rebar_temp_id')}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+              <div class="max-w-xs">
+                ${spacingBlock(str.toe.rebarTemp, str.toe.As_trans, str.toe.spacing_trans, 'Ast', 'rebar_temp_id', 'spacing_trans_override_cm')}
+              </div>
+              <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2">
+                ${(() => {
+                  const Wpx = 300, Hpx = 100;
+                  const rx0 = 20, rx1 = 280, ry0 = 30, ry1 = 80;
+                  const notchCx = (rx0 + rx1) / 2, notchW = 40;
+                  const breakY = ry0 - 15;
+                  const midX = (rx0 + rx1) / 2;
+                  const dotsRow = (y) => Array.from({ length: 13 }, (_, i) => {
+                    const cx = rx0 + 10 + (i / 12) * (rx1 - rx0 - 20);
+                    return `<circle cx="${cx}" cy="${y}" r="2.4" fill="#f97316"/>`;
+                  }).join('');
+                  return `
+                    <svg viewBox="0 0 ${Wpx} ${Hpx}" style="max-width:280px; width:100%;">
+                      <polygon points="${rx0},${ry1} ${rx0},${ry0} ${notchCx - notchW / 2},${ry0} ${notchCx - notchW / 2},${breakY} ${notchCx + notchW / 2},${breakY} ${notchCx + notchW / 2},${ry0} ${rx1},${ry0} ${rx1},${ry1}"
+                        fill="#f8fafc" stroke="#0f172a" stroke-width="2"/>
+                      <line x1="${notchCx - notchW / 2 - 30}" y1="${breakY}" x2="${notchCx - notchW / 2 - 6}" y2="${breakY}" stroke="#334155" stroke-width="1.3"/>
+                      <path d="M ${notchCx - notchW / 2 - 6} ${breakY} l 4,-6 l 8,12 l 8,-12 l 4,6" fill="none" stroke="#334155" stroke-width="1.3"/>
+                      <line x1="${notchCx + notchW / 2 + 6}" y1="${breakY}" x2="${notchCx + notchW / 2 + 30}" y2="${breakY}" stroke="#334155" stroke-width="1.3"/>
+                      <!-- Acero transversal visto en corte (perpendicular a este plano): dos hileras de puntos -->
+                      ${dotsRow(ry0 + 12)}
+                      ${dotsRow(ry1 - 12)}
+                      <text x="${rx0 + 10}" y="${(ry0 + ry1) / 2 + 4}" font-size="12" font-weight="700" fill="#2563eb" text-anchor="start">Punta</text>
+                      <text x="${rx1 - 10}" y="${(ry0 + ry1) / 2 + 4}" font-size="12" font-weight="700" fill="#2563eb" text-anchor="end">Talón</text>
+                      <line x1="${midX}" y1="${ry0}" x2="${midX}" y2="${ry1}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3"/>
+                    </svg>`;
+                })()}
+              </div>
             </div>
           </div>
+
+          ${(() => {
+            const barShapeIcon = (shape) => {
+              const stroke = '#0f172a';
+              const Wpx = 70, Hpx = 34;
+              // Punta de flecha en la dirección del doblez, igual convención
+              // que el plano de referencia (marca el gancho, no solo la línea).
+              const arrow = (x, y, angleDeg) => `<g transform="translate(${x},${y}) rotate(${angleDeg})"><path d="M 0,0 L -6,-2.5 L -6,2.5 Z" fill="${stroke}"/></g>`;
+              const shapes = {
+                'hook-straight': `<path d="M 12,6 L 12,26 L 24,30" fill="none" stroke="${stroke}" stroke-width="2.5"/>${arrow(24, 30, 22)}`,
+                'straight': `<line x1="12" y1="6" x2="12" y2="28" stroke="${stroke}" stroke-width="2.5"/>`,
+                'hook-diagonal': `<path d="M 14,4 L 46,26 L 58,30" fill="none" stroke="${stroke}" stroke-width="2.5"/>${arrow(58, 30, 22)}`,
+                'diagonal': `<line x1="14" y1="4" x2="52" y2="28" stroke="${stroke}" stroke-width="2.5"/>`,
+                'hooks-both': `<path d="M 8,10 L 12,4 L 58,4 L 62,10" fill="none" stroke="${stroke}" stroke-width="2.5"/>${arrow(8, 10, 115)}${arrow(62, 10, 65)}`,
+              };
+              return `<svg viewBox="0 0 ${Wpx} ${Hpx}" style="width:56px; height:28px;">${shapes[shape] || shapes.straight}</svg>`;
+            };
+
+            const schedule = calculateRebarSchedule(w, str);
+            return `
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3 avoid-break">
+            <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">G. Cuadro de Habilitación de Acero</h4>
+            <p class="text-[11px] text-slate-500 mb-2">
+              Lista de habilitación para un tramo de muro de <strong>${schedule.wallLength.toFixed(2)} m</strong> de
+              longitud (editable en "Longitud del tramo de muro (L)", Hoja Datos). La forma de cada barra es
+              esquemática; el largo ya incluye el desarrollo de gancho donde corresponde.
+            </p>
+            <div class="overflow-x-auto">
+              <table class="w-full text-[11px] border border-slate-200 rounded-lg overflow-hidden">
+                <thead class="bg-amber-500 text-white">
+                  <tr>
+                    <th class="py-1.5 px-2 text-left">Marca</th>
+                    <th class="py-1.5 px-2 text-left">Elemento</th>
+                    <th class="py-1.5 px-2 text-left">Ø</th>
+                    <th class="py-1.5 px-2 text-center">Forma</th>
+                    <th class="py-1.5 px-2 text-right">Long. unit. (m)</th>
+                    <th class="py-1.5 px-2 text-right">Cant.</th>
+                    <th class="py-1.5 px-2 text-right">Long. total (m)</th>
+                    <th class="py-1.5 px-2 text-right">Peso (kg)</th>
+                  </tr>
+                </thead>
+                <tbody class="text-slate-700">
+                  ${schedule.rows.map(r => `
+                  <tr class="border-t border-slate-100">
+                    <td class="py-1 px-2 font-bold">${r.mark}</td>
+                    <td class="py-1 px-2">${r.element}</td>
+                    <td class="py-1 px-2 font-mono">${r.diameter_name}</td>
+                    <td class="py-1 px-2 text-center">${barShapeIcon(r.shape)}</td>
+                    <td class="py-1 px-2 text-right font-mono">${r.unitLength_m.toFixed(2)}</td>
+                    <td class="py-1 px-2 text-right font-mono">${r.quantity}</td>
+                    <td class="py-1 px-2 text-right font-mono">${r.totalLength_m.toFixed(1)}</td>
+                    <td class="py-1 px-2 text-right font-mono">${r.weight_kg.toFixed(1)} kg</td>
+                  </tr>`).join('')}
+                  <tr class="border-t border-slate-200 bg-amber-50 font-bold">
+                    <td class="py-1.5 px-2" colspan="7">Peso total de acero (tramo de ${schedule.wallLength.toFixed(2)} m)</td>
+                    <td class="py-1.5 px-2 text-right font-mono">${schedule.totalWeight_kg.toFixed(1)} kg</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          `;
+          })()}
           `;
           })()}
         </section>
@@ -2503,13 +2717,14 @@ export class AppUIController {
 
     reportContainer.innerHTML = this.reportUnit === 'Tn' ? this.convertReportUnitsToTn(reportHtml) : reportHtml;
 
-    // Los selectores de varilla insertados dentro del informe (p.ej. en los
-    // bloques "Varilla a usar") se recrean con cada regeneración del HTML,
-    // así que no quedan enlazados por bindInputEvents() (que solo corrió una
-    // vez al iniciar la app sobre los elementos que existían entonces) — se
+    // Los selectores de varilla y los campos de espaciamiento editable
+    // insertados dentro del informe (p.ej. en los bloques "Varilla a usar" /
+    // "S final") se recrean con cada regeneración del HTML, así que no
+    // quedan enlazados por bindInputEvents() (que solo corrió una vez al
+    // iniciar la app sobre los elementos que existían entonces) — se
     // vuelven a enlazar aquí cada vez.
-    reportContainer.querySelectorAll('select[data-bind]').forEach((sel) => {
-      sel.addEventListener('change', (e) => this.handleInputChange(e.target, true));
+    reportContainer.querySelectorAll('select[data-bind], input[data-bind]').forEach((el) => {
+      el.addEventListener('change', (e) => this.handleInputChange(e.target, true));
     });
 
     if (window.renderMathInElement) {

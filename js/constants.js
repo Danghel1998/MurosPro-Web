@@ -42,6 +42,7 @@ export const DEFAULT_WALL_DATA = {
     key_width: 0.40,
     key_pos: 1.20,
     Df: 1.20,        // Profundidad de fundación
+    wall_length: 10.00, // Longitud física del tramo de muro (para el cuadro de habilitación de acero)
   },
 
   // Datos del Suelo de Fundación
@@ -80,7 +81,9 @@ export const DEFAULT_WALL_DATA = {
     rebar_stem_id: 1,  // Ø 1/2"
     rebar_toe_id: 1,   // Ø 1/2"
     rebar_heel_id: 2,  // Ø 5/8"
-    rebar_temp_id: 1,  // Ø 1/2"
+    rebar_temp_id: 1,  // Ø 1/2" (Asvce y transversal de zapata)
+    rebar_temp_ce_id: 1, // Ø 1/2" (Ash cara exterior, independiente)
+    rebar_temp_ci_id: 1, // Ø 1/2" (Ash cara interior, independiente)
   },
 
   // Condiciones del Sitio

@@ -134,6 +134,16 @@
                 <span class="eng-unit-badge">m</span>
               </div>
             </div>
+            <div class="eng-input-group mt-2">
+              <label class="eng-label">
+                <span>Longitud del tramo de muro</span>
+                <span class="eng-symbol">(L):</span>
+              </label>
+              <div class="eng-cell-wrapper">
+                <input type="number" step="0.5" min="1.0" max="200.0" class="eng-cell-input" data-bind="geometry.wall_length" data-sync="geometry.wall_length">
+                <span class="eng-unit-badge">m</span>
+              </div>
+            </div>
           </div>
 
 
@@ -723,13 +733,24 @@
             <canvas id="wallCanvas" class="w-full h-full block"></canvas>
           </div>
           <div id="canvas3d_container" class="canvas-container w-full h-[520px] lg:h-full rounded-lg border border-slate-200 hidden relative">
-            <div class="absolute top-2 left-2 z-10 bg-white/90 border border-slate-200 rounded-lg px-2.5 py-2 text-[10px] leading-relaxed shadow-sm">
-              <p class="font-bold text-slate-600 mb-1">Franja representativa — arrastra para rotar, rueda para zoom</p>
-              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#dc2626"></span>Asv Ci (interior)</p>
-              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#2563eb"></span>Asv Ce (exterior)</p>
-              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#16a34a"></span>Acero Punta</p>
-              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#9333ea"></span>Acero Talón</p>
-              <p><span class="inline-block w-2.5 h-2.5 rounded-sm align-middle mr-1" style="background:#f59e0b"></span>Transversal reparto</p>
+            <div id="rebar3d_legend" class="absolute top-2 left-2 z-10 bg-white/90 border border-slate-200 rounded-lg px-2.5 py-2 text-[10px] leading-relaxed shadow-sm">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <p class="font-bold text-slate-600">Franja representativa — arrastra para rotar, rueda para zoom</p>
+                <button id="rebar3d_legend_toggle" type="button" class="shrink-0 text-slate-500 hover:text-slate-800 leading-none px-1" title="Mostrar/ocultar leyenda">▾</button>
+              </div>
+              <div id="rebar3d_legend_body">
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5"><input type="checkbox" checked data-rebar-key="asvci" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#dc2626"></span>Asv Ci, continua (interior)<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="asvci"></span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5"><input type="checkbox" checked data-rebar-key="asvciBaston" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#d946ef"></span>Asv Ci, bastón (interior)<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="asvciBaston"></span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5"><input type="checkbox" checked data-rebar-key="asvce" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#2563eb"></span>Asv Ce (exterior)<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="asvce"></span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5"><input type="checkbox" checked data-rebar-key="ashce" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#3b82f6"></span>Ash, cara exterior<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="ashce"></span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5"><input type="checkbox" checked data-rebar-key="ashci" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#ef4444"></span>Ash, cara interior<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="ashci"></span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5"><input type="checkbox" checked data-rebar-key="puntaMain" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#00b140"></span>Acero Punta<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="puntaMain"></span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5"><input type="checkbox" checked data-rebar-key="talonMain" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#9333ea"></span>Acero Talón<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="talonMain"></span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5"><input type="checkbox" checked data-rebar-key="transversal" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#f97316"></span>Transversal reparto<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="transversal"></span></label>
+                <label class="dentellon-legend-row flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5 hidden"><input type="checkbox" checked data-rebar-key="dentellonVert" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#ea580c"></span>Acero vertical del Dentellón<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="dentellonVert"></span></label>
+                <label class="dentellon-legend-row flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5 hidden"><input type="checkbox" checked data-rebar-key="dentellonHoriz" class="rebar-vis-toggle w-3 h-3 accent-slate-600"><span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:#facc15"></span>Acero horizontal del Dentellón<span class="rebar-dim-text ml-auto pl-2 text-slate-400 font-normal whitespace-nowrap" data-dim-key="dentellonHoriz"></span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-0.5 py-0.5 mt-1 pt-1 border-t border-slate-200"><input type="checkbox" id="rebar3d_real_scale" class="w-3 h-3 accent-slate-600">Ver a diámetro real (sin exagerar)</label>
+              </div>
             </div>
           </div>
         </div>

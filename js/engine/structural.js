@@ -10,7 +10,7 @@ import { REBAR_TABLE } from '../constants.js';
 import { calcRankineKa } from './soilPressures.js';
 
 export function calculateStructuralDesign(wallData, geoResults) {
-  const { geometry, backfill, loads, materials, safety_req } = wallData;
+  const { geometry, backfill, foundation, loads, materials, safety_req } = wallData;
 
   const fc = materials.fc; // MPa (21 MPa = 210 kg/cm²)
   const fy = materials.fy; // MPa (420 MPa = 4200 kg/cm²)
@@ -37,6 +37,11 @@ export function calculateStructuralDesign(wallData, geoResults) {
   const rebarToe = REBAR_TABLE[materials.rebar_toe_id] || REBAR_TABLE[1];
   const rebarHeel = REBAR_TABLE[materials.rebar_heel_id] || REBAR_TABLE[2];
   const rebarTemp = REBAR_TABLE[materials.rebar_temp_id] || REBAR_TABLE[0];
+  // Ash cara exterior/interior: independientes entre sí (cada cara puede
+  // usar un diámetro distinto), con fallback a rebar_temp_id si el proyecto
+  // guardado es de antes de esta separación.
+  const rebarTempCe = REBAR_TABLE[materials.rebar_temp_ce_id ?? materials.rebar_temp_id] || REBAR_TABLE[0];
+  const rebarTempCi = REBAR_TABLE[materials.rebar_temp_ci_id ?? materials.rebar_temp_id] || REBAR_TABLE[0];
 
   // Factores de mayoración: U = 1.2D + 1.7L + 1.7H (convención de la
   // memoria de referencia UNI para el empuje de tierras y la sobrecarga).
@@ -94,7 +99,7 @@ export function calculateStructuralDesign(wallData, geoResults) {
 
   // Acero vertical principal en la cara interior (tracción)
   const stemFlex = calcRequiredRebar(Mu_stem, fc, fy, b_unit, d_stem, phi_flex);
-  const spacing_stem = calcSpacing(stemFlex.As_design, rebarStem.area_cm2);
+  const spacing_stem = applyOverride(calcSpacing(stemFlex.As_design, rebarStem.area_cm2), materials.spacing_stem_override_cm);
 
   // Verificación del peralte (formato de la memoria de referencia, en
   // kg/cm²): con la cuantía final ω = ρ·fy/f'c, se recalcula el peralte
@@ -110,18 +115,40 @@ export function calculateStructuralDesign(wallData, geoResults) {
   const t2_calc_cm = d_check_cm + cover_stem_cm + (rebarStem.diameter_mm / 10.0 / 2.0);
   const t2_usar_cm = Math.ceil((b_bot * 100.0) / 5.0) * 5.0; // redondeado a 5 cm
 
-  // Longitud crítica (Lc): altura medida desde la base donde el momento
-  // actuante cae a la mitad del momento en la base (punto a partir del cual
-  // basta con la mitad del acero vertical), más una extensión igual al
+  // Longitud crítica Lc (tramo 1 -> 2): altura medida desde la base donde
+  // el momento actuante cae a la mitad del momento en la base (punto a
+  // partir del cual basta con el acero mínimo), más una extensión igual al
   // peralte efectivo "d" (ACI 318 12.10.3), redondeada hacia arriba.
   const x_cut = solveCutoffHeight(Mu_stem / 2.0, Ka, gamma_s, q_surcharge, H_stem, LF_H, LF_L);
   const hc_stem = Math.max(0, H_stem - x_cut);
   const Lc_stem = hc_stem + d_stem;
   const Lc_stem_usar = Math.ceil(Lc_stem * 10.0) / 10.0; // redondeado a 10 cm
 
-  // Acero vertical en la cara exterior (compresión / montaje, mínimo)
-  const As_stem_vert_ext = 0.0015 * 10000.0 * b_bot; // 0.0015 b t
-  const spacing_vert_ext = calcSpacing(As_stem_vert_ext, rebarTemp.area_cm2);
+  // El espesor real del vástago disminuye hacia la corona por el batido de
+  // la cara frontal, así que el peralte efectivo "d" del tramo 2 también es
+  // menor que en la base — se estima con el espesor real en el punto medio
+  // de ese tramo (igual criterio que ya usa Asvce).
+  const thicknessAt = (y) => b_bot - (b_bot - b_top) * Math.min(1, Math.max(0, y / H_stem));
+  const d_at = (thickness) => Math.max(0.05, thickness - cover_stem - (rebarStem.diameter_m / 2.0));
+
+  // Tramo 2 (de Lc a la corona): solo acero mínimo (As_min), con el
+  // peralte real (más delgado) de esa zona — mismo diámetro de varilla.
+  const z2_mid_est = (Lc_stem_usar + H_stem) / 2.0;
+  const d_z2 = d_at(thicknessAt(z2_mid_est));
+  const As_min_z2 = calcRequiredRebar(0.001, fc, fy, b_unit, d_z2, phi_flex).As_min;
+  const spacing_stem_z2 = calcSpacing(As_min_z2, rebarStem.area_cm2);
+
+  // Acero vertical en la cara exterior (compresión / montaje, mínimo): una
+  // sola varilla continua de la base a la corona, con un solo espaciamiento
+  // (el más cerrado, calculado con el espesor real en la base), sin
+  // economizar hacia la corona.
+  const z1_mid = Lc_stem_usar / 2.0;
+  const As_stem_vert_ext_inferior = 0.0015 * 10000.0 * thicknessAt(z1_mid);
+  const spacing_vert_ext_inferior = applyOverride(calcSpacing(As_stem_vert_ext_inferior, rebarTemp.area_cm2), materials.spacing_vert_ext_override_cm);
+  // Se mantienen los nombres anteriores (sin sufijo) apuntando al valor
+  // único, por compatibilidad con el resto del informe.
+  const As_stem_vert_ext = As_stem_vert_ext_inferior;
+  const spacing_vert_ext = spacing_vert_ext_inferior;
 
   // Acero horizontal (Ash): dos tramos en altura — de la base hasta la
   // mitad (d = t2, espesor en la base) y de la mitad hasta la corona
@@ -138,10 +165,10 @@ export function calculateStructuralDesign(wallData, geoResults) {
   const Ash_ce_superior = (2.0 / 3.0) * Ast_superior;
   const Ash_ci_superior = (1.0 / 3.0) * Ast_superior;
 
-  const sp_ce_inferior = calcSpacing(Ash_ce_inferior, rebarTemp.area_cm2);
-  const sp_ci_inferior = calcSpacing(Ash_ci_inferior, rebarTemp.area_cm2);
-  const sp_ce_superior = calcSpacing(Ash_ce_superior, rebarTemp.area_cm2);
-  const sp_ci_superior = calcSpacing(Ash_ci_superior, rebarTemp.area_cm2);
+  const sp_ce_inferior = applyOverride(calcSpacing(Ash_ce_inferior, rebarTempCe.area_cm2), materials.sp_ce_inferior_override_cm);
+  const sp_ci_inferior = applyOverride(calcSpacing(Ash_ci_inferior, rebarTempCi.area_cm2), materials.sp_ci_inferior_override_cm);
+  const sp_ce_superior = applyOverride(calcSpacing(Ash_ce_superior, rebarTempCe.area_cm2), materials.sp_ce_superior_override_cm);
+  const sp_ci_superior = applyOverride(calcSpacing(Ash_ci_superior, rebarTempCi.area_cm2), materials.sp_ci_superior_override_cm);
 
   // =========================================================================
   // 2. DISEÑO DE LA PUNTERA (TOE / ZAPATA ANTERIOR)
@@ -149,15 +176,20 @@ export function calculateStructuralDesign(wallData, geoResults) {
   const d_toe = Math.max(0.1, hz - cover_footing - (rebarToe.diameter_m / 2.0));
 
   // Desglose F1 (reacción rectangular a q en la cara del vástago), F2
-  // (reacción triangular excedente hacia la punta, hasta q_max) y F3 (peso
-  // propio de la losa de zapata bajo la punta, descendente) — igual que la
-  // memoria de referencia ("En la Punta"). Momento = −(Fuerza × Brazo).
+  // (reacción triangular excedente hacia la punta, hasta q_max) y F3 (q4 ×
+  // longitud de la punta, con q4 = peso propio del suelo de relleno/
+  // desplante que descansa sobre la puntera, γf×(Df−hz) — no la reacción
+  // del suelo bajo la zapata) — igual que la memoria de referencia
+  // ("En la Punta"). Momento = −(Fuerza × Brazo).
   const q_stem_front = geoResults.q_toe - (geoResults.q_toe - geoResults.q_heel) * (B_toe / geometry.B); // q3
   const F1_toe = q_stem_front * B_toe;
   const y1_toe = B_toe / 2.0;
   const F2_toe = 0.5 * (geoResults.q_toe - q_stem_front) * B_toe;
   const y2_toe = (2.0 / 3.0) * B_toe;
-  const F3_toe = -(hz * gamma_c * B_toe);
+  const Df = geometry.Df || hz;
+  const gamma_f = foundation.gamma;
+  const q4_toe = gamma_f * Math.max(0, Df - hz);
+  const F3_toe = -(q4_toe * B_toe);
   const y3_toe = B_toe / 2.0;
 
   const Vd_toe = F1_toe + F2_toe + F3_toe;
@@ -172,7 +204,7 @@ export function calculateStructuralDesign(wallData, geoResults) {
   const pass_toe_shear = Vu_toe <= phiVc_toe;
 
   const toeFlex = calcRequiredRebar(Mu_toe, fc, fy, b_unit, d_toe, phi_flex);
-  const spacing_toe = calcSpacing(toeFlex.As_design, rebarToe.area_cm2);
+  const spacing_toe = applyOverride(calcSpacing(toeFlex.As_design, rebarToe.area_cm2), materials.spacing_toe_override_cm);
 
   // =========================================================================
   // 3. DISEÑO DEL TALÓN (HEEL / ZAPATA POSTERIOR)
@@ -207,12 +239,12 @@ export function calculateStructuralDesign(wallData, geoResults) {
   const pass_heel_shear = Vu_heel <= phiVc_heel;
 
   const heelFlex = calcRequiredRebar(Mu_heel, fc, fy, b_unit, d_heel, phi_flex);
-  const spacing_heel = calcSpacing(heelFlex.As_design, rebarHeel.area_cm2);
+  const spacing_heel = applyOverride(calcSpacing(heelFlex.As_design, rebarHeel.area_cm2), materials.spacing_heel_override_cm);
 
   // Acero transversal de reparto en puntera y talón (compartido, incluye
   // el dentellón si está presente — misma varilla continúa hacia el tacón)
   const As_trans_footing = 0.0018 * 10000.0 * hz;
-  const spacing_trans_footing = calcSpacing(As_trans_footing, rebarTemp.area_cm2);
+  const spacing_trans_footing = applyOverride(calcSpacing(As_trans_footing, rebarTemp.area_cm2), materials.spacing_trans_override_cm);
 
   // Longitud de desarrollo básica ld (cm)
   const ld_stem_cm = Math.max(30.0, ((fy / (2.1 * Math.sqrt(fc))) * (rebarStem.diameter_mm / 10.0) * 1.3));
@@ -253,22 +285,27 @@ export function calculateStructuralDesign(wallData, geoResults) {
       Lc: Lc_stem,
       Lc_usar: Lc_stem_usar,
       hc: hc_stem,
-      rebar_intercalado: `Cortar a Lc = ${Lc_stem_usar.toFixed(2)} m desde la base (queda solo cara exterior + mínimo)`,
-      rebar_vert_ext: `${rebarTemp.name} @ ${spacing_vert_ext} cm (Cara exterior)`,
+      spacing_z2: spacing_stem_z2,
+      rebar_intercalado: `Una sola varilla: roja (base a corona) + verde (base a Lc, alternada en el espaciamiento)`,
+      rebar_vert_ext: `${rebarTemp.name} @ ${spacing_vert_ext_inferior} cm (Cara exterior)`,
       fc_kgcm2, fy_kgcm2,
       x_cut, hp_menos_hc: H_stem - hc_stem,
       As_vert_ext: As_stem_vert_ext,
       spacing_vert_ext,
+      As_vert_ext_inferior: As_stem_vert_ext_inferior,
+      spacing_vert_ext_inferior,
+      vert_ext_mid_y: hz + H_stem * 0.5,
       rebarTemp,
+      rebarTempCe, rebarTempCi,
       d_h_inferior, d_h_superior,
       rho_h_min: RHO_H_MIN,
       Ast_inferior, Ash_ce_inferior, Ash_ci_inferior, sp_ce_inferior, sp_ci_inferior,
       Ast_superior, Ash_ce_superior, Ash_ci_superior, sp_ce_superior, sp_ci_superior,
       horizontal_summary: {
-        inferior_ce: `${rebarTemp.name} @ ${sp_ce_inferior} cm (cara exterior)`,
-        inferior_ci: `${rebarTemp.name} @ ${sp_ci_inferior} cm (cara interior)`,
-        superior_ce: `${rebarTemp.name} @ ${sp_ce_superior} cm (cara exterior)`,
-        superior_ci: `${rebarTemp.name} @ ${sp_ci_superior} cm (cara interior)`
+        inferior_ce: `${rebarTempCe.name} @ ${sp_ce_inferior} cm (cara exterior)`,
+        inferior_ci: `${rebarTempCi.name} @ ${sp_ci_inferior} cm (cara interior)`,
+        superior_ce: `${rebarTempCe.name} @ ${sp_ce_superior} cm (cara exterior)`,
+        superior_ci: `${rebarTempCi.name} @ ${sp_ci_superior} cm (cara interior)`
       },
       ld_cm: Math.round(ld_stem_cm)
     },
@@ -422,4 +459,11 @@ function calcSpacing(As_req_cm2_m, rebar_area_cm2) {
   }
 
   return 25.0;
+}
+
+// Permite al usuario fijar manualmente el espaciamiento final (en cm) desde
+// la Memoria de Cálculo, en vez del valor a un estándar constructivo que
+// calcSpacing() elige automáticamente.
+function applyOverride(calculated_cm, override_cm) {
+  return (override_cm !== null && override_cm !== undefined && override_cm !== '') ? Number(override_cm) : calculated_cm;
 }

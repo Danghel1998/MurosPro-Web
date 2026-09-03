@@ -1049,80 +1049,182 @@ export class WallCanvasRenderer {
 
     ctx.save();
 
-    // 1. Armadura Principal de Tracción del Vástago (Cara Trasera) - ROJO
-    // Barra vertical que baja por la cara interior y dobla en la zapata hacia el talón o puntera
-    const rebarStemX = stemBackX - covStem;
-    const hookY = covFoot;
-    const hookEndX = B - covFoot;
+    // Lienzo limpio: la silueta del muro + relleno ya la dibujan
+    // drawSoilAndBackfill/drawConcreteWall antes de llegar aquí. El acero
+    // se irá agregando de nuevo, un elemento a la vez, según se indique.
 
-    ctx.strokeStyle = '#dc2626';
+    // 1. Acero Superior de la Zapata (Talón) - MORADO. Corrido en todo el
+    // ancho de la zapata (punta + talón), con gancho a 90° en ambos
+    // extremos según el diámetro real de la varilla (12·db), no una
+    // longitud fija.
+    const hookLen = (diameter_m) => Math.max(0.10, diameter_m * 12.0);
+    const heelRebarY = hz - covFoot;
+    const hookHeel = hookLen(str.heel.rebar.diameter_m);
+    ctx.strokeStyle = '#9333ea';
     ctx.lineWidth = 3.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-
     ctx.beginPath();
-    ctx.moveTo(toX(rebarStemX), toY(H - covStem));
-    ctx.lineTo(toX(rebarStemX), toY(hookY));
-    ctx.lineTo(toX(hookEndX), toY(hookY + 0.04)); // Pata de anclaje a 90° hacia el talón
+    ctx.moveTo(toX(covFoot), toY(heelRebarY - hookHeel));
+    ctx.lineTo(toX(covFoot), toY(heelRebarY));
+    ctx.lineTo(toX(B - covFoot), toY(heelRebarY));
+    ctx.lineTo(toX(B - covFoot), toY(heelRebarY - hookHeel));
     ctx.stroke();
 
-    // 2. Barra de corte intermedia a 50% de altura (Ahorro de acero) - NARANJA DISCONTINUA
-    const midH = hz + (H - hz) * 0.55;
-    ctx.strokeStyle = '#f97316';
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([8, 4]);
-    ctx.beginPath();
-    ctx.moveTo(toX(rebarStemX - 0.03), toY(midH));
-    ctx.lineTo(toX(rebarStemX - 0.03), toY(hookY));
-    ctx.stroke();
-    ctx.setLineDash([]);
+    this.drawCallout(ctx, toX(stemBackX + B_heel / 2), toY(heelRebarY), toX(stemBackX + B_heel / 2 + 0.3), toY(hz + 0.8),
+      `Acero Superior de Zapata (corrido): ${str.heel.rebar_callout}`, '#9333ea');
 
-    // 3. Armadura de la Puntera (Inferior) - VERDE
+    // 2. Acero Inferior de la Zapata (Punta) - VERDE. Corrido en todo el
+    // ancho de la zapata (punta + talón), con gancho a 90° en ambos
+    // extremos según el diámetro real de la varilla (12·db), doblando
+    // hacia arriba (es la malla inferior).
     const toeRebarY = covFoot;
-    ctx.strokeStyle = '#16a34a';
+    const hookToe = hookLen(str.toe.rebar.diameter_m);
+    ctx.strokeStyle = '#00b140';
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(toX(covFoot), toY(hz - covFoot)); // Gancho vertical frontal
+    ctx.moveTo(toX(covFoot), toY(toeRebarY + hookToe));
     ctx.lineTo(toX(covFoot), toY(toeRebarY));
-    ctx.lineTo(toX(stemBotFrontX + 0.6), toY(toeRebarY)); // Empotramiento
+    ctx.lineTo(toX(B - covFoot), toY(toeRebarY));
+    ctx.lineTo(toX(B - covFoot), toY(toeRebarY + hookToe));
     ctx.stroke();
 
-    // 4. Armadura del Talón (Superior) - AZUL
-    const heelRebarY = hz - covFoot;
+    this.drawCallout(ctx, toX(B_toe / 2), toY(toeRebarY), toX(B_toe / 2 - 0.4), toY(-0.4),
+      `Acero Inferior de Zapata (corrido): ${str.toe.rebar_callout}`, '#00b140');
+
+    // 3. Acero Transversal de Reparto (Punta y Talón) - AZUL. Visto en
+    // corte (corre perpendicular a este plano, a lo largo del muro), por
+    // eso se dibuja como puntos. Corrido en TODO el ancho de la zapata (no
+    // solo bajo su propio miembro): una fila a la altura del acero
+    // inferior y otra a la altura del acero superior, cada una con su
+    // propio espaciamiento real, igual que las varillas principales.
+    ctx.fillStyle = '#f97316';
+    const dotsRow = (y, xFrom, xTo, spacingCm) => {
+      const s = Math.max(0.02, (spacingCm || 20) / 100);
+      for (let x = xFrom + s / 2; x < xTo - 1e-6; x += s) {
+        ctx.beginPath();
+        ctx.arc(toX(x), toY(y), 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    dotsRow(toeRebarY, covFoot, B - covFoot, str.toe.spacing_trans);
+    dotsRow(heelRebarY, covFoot, B - covFoot, str.heel.spacing_trans);
+
+    // 4. Acero Vertical en Cara Exterior (Asvce) - AZUL. Varilla única
+    // continua, apoyada justo encima de la parrilla inferior de la zapata
+    // (Acero Punta) y siguiendo el batido de la cara exterior hasta la
+    // corona, con gancho a 90° en la base y en la corona.
+    const yBaseCe = toeRebarY + (str.toe.rebar.diameter_m + str.stem.rebarTemp.diameter_m) / 2;
+    const hookCe = hookLen(str.stem.rebarTemp.diameter_m);
+    const xFrontAt = (y) => stemBotFrontX + (stemTopFrontX - stemBotFrontX) * ((y - hz) / (H - hz)) + covStem;
+    const xBaseCe = xFrontAt(hz);
+    const xTopCe = xFrontAt(H);
     ctx.strokeStyle = '#2563eb';
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(toX(stemBotFrontX), toY(heelRebarY));
-    ctx.lineTo(toX(B - covFoot), toY(heelRebarY));
-    ctx.lineTo(toX(B - covFoot), toY(covFoot + 0.05)); // Gancho vertical posterior
+    ctx.moveTo(toX(xBaseCe + hookCe), toY(yBaseCe));
+    ctx.lineTo(toX(xBaseCe), toY(yBaseCe));
+    ctx.lineTo(toX(xTopCe), toY(H - covStem));
+    ctx.lineTo(toX(xTopCe + hookCe), toY(H - covStem));
     ctx.stroke();
 
-    // 5. Armadura de Retracción y Temperatura (Puntos / Círculos de barras horizontales)
-    ctx.fillStyle = '#475569';
-    const numTempStem = Math.floor((H - hz) / 0.25);
-    for (let i = 1; i <= numTempStem; i++) {
-      const y = hz + i * 0.25;
-      // Cara trasera
-      ctx.beginPath();
-      ctx.arc(toX(rebarStemX - 0.03), toY(y), 3.5, 0, Math.PI * 2);
-      ctx.fill();
+    this.drawCallout(ctx, toX(xTopCe), toY(H - covStem), toX(xTopCe + 0.6), toY(H - 1.2),
+      `Acero Vertical Cara Exterior (Asvce): ${str.stem.rebar_vert_ext}`, '#2563eb');
 
-      // Cara delantera
-      const frontX = stemBotFrontX + (stemTopFrontX - stemBotFrontX) * ((y - hz) / (H - hz)) + covStem;
+    // 5. Acero Vertical en Cara Interior (Asvci) - ROJO. Varilla continua
+    // (gancho en la base y en la corona, ambos hacia la cara exterior) más
+    // la varilla de tramo 1 en VERDE (gancho solo en la base, hacia la
+    // cara interior, se corta sin gancho en Lc).
+    const xInt = stemBackX - covStem;
+    const hookCi = hookLen(str.stem.rebar.diameter_m);
+    const yBaseCiCont = covFoot + (str.toe.rebar.diameter_m + str.stem.rebar.diameter_m) / 2;
+    const yBaseCiT1 = yBaseCiCont + 0.15;
+    const yLcCi = hz + str.stem.Lc_usar;
+    ctx.strokeStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.moveTo(toX(xInt - hookCi), toY(yBaseCiCont));
+    ctx.lineTo(toX(xInt), toY(yBaseCiCont));
+    ctx.lineTo(toX(xInt), toY(H - covStem));
+    ctx.lineTo(toX(xInt - hookCi), toY(H - covStem));
+    ctx.stroke();
+
+    ctx.strokeStyle = '#d946ef';
+    ctx.beginPath();
+    ctx.moveTo(toX(xInt), toY(yLcCi));
+    ctx.lineTo(toX(xInt), toY(yBaseCiT1));
+    ctx.lineTo(toX(xInt + hookCi), toY(yBaseCiT1));
+    ctx.stroke();
+
+    this.drawCallout(ctx, toX(xInt), toY(H - covStem), toX(xInt + 0.6), toY(H - 1.6),
+      `Acero Vertical Cara Interior (Asvci): ${str.stem.rebar_callout}`, '#dc2626');
+
+    // 6. Acero Horizontal (Ash) - círculos pegados a las varillas, siguiendo el batido
+    const xFrontAtAsh = (y) => stemBotFrontX + (stemTopFrontX - stemBotFrontX) * ((y - hz) / (H - hz)) + covStem + 0.03;
+    const xIntCi = stemBackX - 0.06; // cara interior, un poco más a la izquierda del acero vertical rojo
+
+    const drawHorizontalCirclesAsh = (yStart, yEnd, spacingCm, colorHex, xFunc) => {
+      ctx.fillStyle = colorHex;
+      const spacing = Math.max(0.02, (spacingCm || 20) / 100);
+      for (let y = yStart + spacing/2; y <= yEnd - 1e-6; y += spacing) {
+        const x = xFunc ? xFunc(y) : xIntCi;
+        ctx.beginPath();
+        ctx.arc(toX(x), toY(y), 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    // Usar espaciamiento inferior para toda la altura (uniforme)
+    drawHorizontalCirclesAsh(hz, H, str.stem.sp_ce_inferior, '#2563eb', xFrontAtAsh); // azul exterior (sigue pendiente)
+    drawHorizontalCirclesAsh(hz, H, str.stem.sp_ci_inferior, '#16a34a', null); // verde interior (posición constante)
+
+    // 7. Acero del Dentellón (si está habilitado): vertical en "U" con
+    // gancho de anclaje a 45° hacia abajo/adentro en cada rama (naranja
+    // rojizo), y horizontal en ambas caras, visto en corte como puntos
+    // (amarillo) — mismo criterio y diámetro que el 3D.
+    if (geometry.has_key && geometry.key_depth > 0 && geometry.key_width > 0) {
+      const xKeyL = geometry.key_pos + covFoot;
+      const xKeyR = geometry.key_pos + geometry.key_width - covFoot;
+      // El gancho se engancha en el Acero Transversal de Reparto cercano al
+      // Acero Superior de Zapata: la rama recta sube derecho hasta ese nivel
+      // (heelRebarY, sin pasarse de altura) y justo ahí se dobla en diagonal
+      // (45°) hacia abajo/adentro, con el gancho según norma (12·db).
+      const rKeyRadius2D = 0.75 * 0.0254 / 2;
+      const hookKeyLen = hookLen(rKeyRadius2D * 2); // gancho según norma: 12·db de esta varilla
+      const cos45 = Math.cos(Math.PI / 4), sin45 = Math.sin(Math.PI / 4);
+      const yBendKey = heelRebarY + str.toe.rebarTemp.diameter_m * 1.5; // un poco encima del transversal, como agarrándolo
+      const yBottomKey = -geometry.key_depth + covFoot;
+
+      ctx.strokeStyle = '#ea580c';
+      ctx.lineWidth = 3.5;
       ctx.beginPath();
-      ctx.arc(toX(frontX), toY(y), 3.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(toX(xKeyL + hookKeyLen * cos45), toY(yBendKey - hookKeyLen * sin45));
+      ctx.lineTo(toX(xKeyL), toY(yBendKey));
+      ctx.lineTo(toX(xKeyL), toY(yBottomKey));
+      ctx.lineTo(toX(xKeyR), toY(yBottomKey));
+      ctx.lineTo(toX(xKeyR), toY(yBendKey));
+      ctx.lineTo(toX(xKeyR - hookKeyLen * cos45), toY(yBendKey - hookKeyLen * sin45));
+      ctx.stroke();
+
+      this.drawCallout(ctx, toX(xKeyR), toY(yBendKey), toX(xKeyR + 0.6), toY(yBendKey - 0.3),
+        `Acero Vertical del Dentellón: Ø 3/4" (19.1 mm) @ 15 cm`, '#ea580c');
+
+      ctx.fillStyle = '#facc15';
+      const spDentH = Math.max(0.02, (str.toe.spacing_trans || 20) / 100);
+      const yFirstRow = yBottomKey + spDentH / 2;
+      for (let y = yFirstRow; y <= yBendKey - spDentH / 2 + 1e-6; y += spDentH) {
+        ctx.beginPath(); ctx.arc(toX(xKeyL), toY(y), 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(toX(xKeyR), toY(y), 3, 0, Math.PI * 2); ctx.fill();
+      }
+      // Acero horizontal adicional, en el centro del ancho, apoyado justo
+      // encima del acero de fondo (rama inferior del acero vertical del
+      // dentellón), no a media altura del primer tramo, para que no quede
+      // flotando sin tocar esa varilla.
+      const xKeyMid = (xKeyL + xKeyR) / 2;
+      const rDentHRadius = str.toe.rebarTemp.diameter_m / 2;
+      const yOverBottomKey = yBottomKey + rKeyRadius2D + rDentHRadius;
+      ctx.beginPath(); ctx.arc(toX(xKeyMid), toY(yOverBottomKey), 3, 0, Math.PI * 2); ctx.fill();
+      this.drawCallout(ctx, toX(xKeyL), toY((yBendKey + yBottomKey) / 2), toX(xKeyL - 0.6), toY((yBendKey + yBottomKey) / 2 - 0.2),
+        `Acero Horizontal del Dentellón: ${str.toe.rebar_trans}`, '#facc15');
     }
-
-    // Callouts / Textos de especificación de barras
-    this.drawCallout(ctx, toX(rebarStemX), toY(H * 0.4), toX(stemBackX + 0.6), toY(H * 0.4), 
-      `Vástago Principal: ${str.stem.rebar_callout}`, '#dc2626');
-
-    this.drawCallout(ctx, toX(B_toe / 2), toY(toeRebarY), toX(B_toe / 2 - 0.4), toY(-0.4), 
-      `Puntera Inferior: ${str.toe.rebar_callout}`, '#16a34a');
-
-    this.drawCallout(ctx, toX(stemBackX + B_heel / 2), toY(heelRebarY), toX(stemBackX + B_heel / 2 + 0.3), toY(hz + 0.8), 
-      `Talón Superior: ${str.heel.rebar_callout}`, '#2563eb');
 
     ctx.restore();
   }
