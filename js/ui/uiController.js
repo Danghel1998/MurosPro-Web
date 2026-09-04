@@ -1045,6 +1045,7 @@ export class AppUIController {
           <div>
             <h2 class="text-xl font-bold text-slate-900 uppercase tracking-tight">Memoria de Cálculo: Muro de Contención en Voladizo</h2>
             <p class="text-slate-500 text-xs">Diseño Geotécnico y Estructural según Norma Técnica Peruana E.060 / ACI 318</p>
+            <p class="text-slate-400 text-xs italic">Creado por el Ing. Dan Oliden</p>
           </div>
           <div class="text-right text-xs text-slate-400">
             <span>Fecha: ${new Date().toLocaleDateString('es-ES')}</span>
