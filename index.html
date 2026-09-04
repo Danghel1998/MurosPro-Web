@@ -6,6 +6,16 @@
   <title>MurosPro - Análisis y Diseño Estructural de Muros en Voladizo (UNI / E.060 / ACI 318)</title>
   <link rel="icon" type="image/jpeg" href="assets/icon-muro.jpg">
 
+  <!-- Aplica el tema guardado antes de pintar la página, para evitar un
+       parpadeo del tema equivocado al cargar. -->
+  <script>
+    (function () {
+      const saved = localStorage.getItem('murospro_theme');
+      const isDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (isDark) document.documentElement.classList.add('dark');
+    })();
+  </script>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
@@ -62,6 +72,11 @@
         <button data-preset="excel_uni_6_5m"></button>
         <button data-preset="muro_sismico_zona4"></button>
       </div>
+
+      <button id="btn_toggle_theme" class="text-xs flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 font-semibold py-1.5 px-3 rounded transition" title="Cambiar entre tema claro y oscuro">
+        <i data-lucide="moon" id="icon_theme_moon" class="w-3.5 h-3.5 text-slate-500"></i>
+        <i data-lucide="sun" id="icon_theme_sun" class="w-3.5 h-3.5 text-slate-500 hidden"></i>
+      </button>
 
       <button id="btn_export_png" class="text-xs flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 font-semibold py-1.5 px-3 rounded transition" title="Exportar plano en imagen PNG">
         <i data-lucide="image" class="w-3.5 h-3.5 text-slate-500"></i> PNG
@@ -907,6 +922,21 @@
     document.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       window.app = new AppUIController();
+
+      const themeBtn = document.getElementById('btn_toggle_theme');
+      const moonIcon = document.getElementById('icon_theme_moon');
+      const sunIcon = document.getElementById('icon_theme_sun');
+      const syncThemeIcon = () => {
+        const isDark = document.documentElement.classList.contains('dark');
+        moonIcon.classList.toggle('hidden', isDark);
+        sunIcon.classList.toggle('hidden', !isDark);
+      };
+      syncThemeIcon();
+      themeBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('murospro_theme', isDark ? 'dark' : 'light');
+        syncThemeIcon();
+      });
     });
   </script>
 </body>

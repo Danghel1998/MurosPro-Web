@@ -297,3 +297,137 @@ code, pre, .font-mono {
 #print_running_header {
   display: none;
 }
+
+/* =========================================================================
+   MODO OSCURO
+   Se activa agregando la clase "dark" al <html> (ver toggle en el header,
+   js/ui/uiController.js). La Memoria de Cálculo (#report_panel) y las
+   áreas de dibujo técnico (.canvas-container, planos 2D/3D) se mantienen
+   siempre claras — como una hoja de papel — sin importar el tema.
+   ========================================================================= */
+
+html.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+/* Tarjetas y celdas de ingeniería (panel izquierdo de datos) */
+html.dark .eng-card {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: none;
+}
+html.dark .eng-card:hover {
+  border-color: #475569;
+}
+html.dark .eng-card-header {
+  border-bottom-color: #334155;
+}
+html.dark .eng-card-title {
+  color: #f1f5f9;
+}
+html.dark .eng-label {
+  color: #cbd5e1;
+}
+html.dark .eng-cell-wrapper {
+  background-color: #0f172a;
+  border-color: #475569;
+  box-shadow: none;
+}
+html.dark .eng-cell-wrapper:focus-within {
+  background-color: #1e293b;
+  border-color: #818cf8;
+}
+html.dark .eng-cell-input {
+  color: #f1f5f9;
+}
+html.dark .eng-unit-badge {
+  background-color: #1e293b;
+  color: #94a3b8;
+  border-left-color: #334155;
+}
+html.dark .eng-cell-yellow-wrapper {
+  background-color: #422006 !important;
+  border-color: #a16207 !important;
+}
+html.dark .eng-cell-yellow-wrapper .eng-unit-badge {
+  background-color: #713f12 !important;
+  color: #fef08a !important;
+  border-left-color: #a16207 !important;
+}
+html.dark .eng-cell-yellow-wrapper .eng-cell-input {
+  color: #fef08a !important;
+}
+
+/* Utilidades de Tailwind usadas en el resto de la interfaz (encabezado,
+   navegación de pestañas, tablas de la pestaña "Tabla de Fuerzas") */
+html.dark .bg-white,
+html.dark .bg-white\/90 {
+  background-color: #1e293b;
+}
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/40,
+html.dark .bg-slate-50\/70 {
+  background-color: #0f172a;
+}
+html.dark .bg-slate-100 {
+  background-color: #1e293b;
+}
+html.dark .bg-slate-200,
+html.dark .bg-slate-200\/80 {
+  background-color: #334155;
+}
+html.dark .hover\:bg-white:hover,
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover {
+  background-color: #334155;
+}
+html.dark .text-slate-900 { color: #f1f5f9; }
+html.dark .text-slate-800 { color: #e2e8f0; }
+html.dark .text-slate-700 { color: #cbd5e1; }
+html.dark .text-slate-600 { color: #94a3b8; }
+html.dark .text-slate-500 { color: #94a3b8; }
+html.dark .text-slate-400 { color: #64748b; }
+html.dark .hover\:text-slate-800:hover,
+html.dark .hover\:text-slate-900:hover { color: #f1f5f9; }
+html.dark .border-slate-100 { border-color: #1e293b; }
+html.dark .border-slate-200 { border-color: #334155; }
+html.dark .border-slate-300 { border-color: #475569; }
+
+html.dark ::-webkit-scrollbar-track { background: #0f172a; }
+html.dark ::-webkit-scrollbar-thumb { background: #475569; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* La Memoria de Cálculo se muestra siempre como una hoja blanca (igual
+   que al imprimirla), sin importar el tema activo. */
+html.dark #report_panel,
+html.dark #report_panel .bg-white,
+html.dark #report_panel .bg-white\/90 {
+  background-color: #ffffff;
+}
+html.dark #report_panel .bg-slate-50,
+html.dark #report_panel .bg-slate-50\/40,
+html.dark #report_panel .bg-slate-50\/70 {
+  background-color: #f8fafc;
+}
+html.dark #report_panel .bg-slate-100 { background-color: #f1f5f9; }
+html.dark #report_panel .bg-slate-200,
+html.dark #report_panel .bg-slate-200\/80 { background-color: #e2e8f0; }
+html.dark #report_panel .text-slate-900 { color: #0f172a; }
+html.dark #report_panel .text-slate-800 { color: #1e293b; }
+html.dark #report_panel .text-slate-700 { color: #334155; }
+html.dark #report_panel .text-slate-600 { color: #475569; }
+html.dark #report_panel .text-slate-500 { color: #64748b; }
+html.dark #report_panel .text-slate-400 { color: #94a3b8; }
+html.dark #report_panel .border-slate-100 { border-color: #f1f5f9; }
+html.dark #report_panel .border-slate-200 { border-color: #e2e8f0; }
+html.dark #report_panel .border-slate-300 { border-color: #cbd5e1; }
+
+/* Los planos técnicos (2D/3D) también se mantienen siempre claros. */
+html.dark .canvas-container {
+  background: radial-gradient(circle at 50% 50%, #ffffff 0%, #f8fafc 100%);
+}
+html.dark #rebar3d_legend.bg-white\/90 {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+}
