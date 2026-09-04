@@ -2665,7 +2665,7 @@ export class AppUIController {
                     <td class="py-1 px-2 text-right font-mono">${r.totalLength_m.toFixed(1)}</td>
                     <td class="py-1 px-2 text-right font-mono">${r.weight_kg.toFixed(1)} kg</td>
                   </tr>`).join('')}
-                  <tr class="border-t border-slate-200 bg-amber-50 font-bold">
+                  <tr class="border-t border-slate-200 bg-amber-50 font-bold avoid-break-before">
                     <td class="py-1.5 px-2" colspan="7">Peso total de acero (tramo de ${schedule.wallLength.toFixed(2)} m)</td>
                     <td class="py-1.5 px-2 text-right font-mono">${schedule.totalWeight_kg.toFixed(1)} kg</td>
                   </tr>
@@ -2682,7 +2682,7 @@ export class AppUIController {
         })()}
 
         <!-- 4. Resumen de Armaduras -->
-        <section class="print-page-break">
+        <section>
           <h3 class="text-base font-bold text-indigo-900 border-b border-indigo-100 pb-1 mb-2">2.5. Resumen General del Acero de Refuerzo</h3>
           <p class="text-xs text-slate-600 mb-2 text-justify">
             A partir de los momentos y cortantes calculados en las secciones anteriores, se
