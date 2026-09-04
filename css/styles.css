@@ -168,15 +168,7 @@ code, pre, .font-mono {
 @media print {
   @page {
     size: A4;
-    /* El margen superior reserva espacio para el encabezado repetido
-       (#print_running_header) en TODAS las páginas. Antes ese espacio se
-       lograba con un margin-top en #calculation_report_content, pero el
-       margin de una caja solo se aplica una vez (antes de su primer
-       fragmento) — en la página 2 en adelante el contenido volvía a
-       arrancar en el borde superior del área de impresión y quedaba
-       debajo del encabezado fijo, superponiendo las letras. Al reservar
-       el espacio en el margen de @page, cada página lo respeta por igual. */
-    margin: 3.6cm 1.8cm 1.8cm 1.8cm;
+    margin: 2.2cm 1.8cm 1.8cm 1.8cm;
   }
 
   html, body {
@@ -226,17 +218,37 @@ code, pre, .font-mono {
     margin: 0 !important;
   }
 
-  /* Encabezado repetido en cada hoja impresa (posición fija = se repite
-     en cada página al imprimir en la mayoría de los navegadores). Se
-     ubica con un "top" negativo para que quede DENTRO del margen superior
-     reservado en @page (arriba del área de contenido), en vez de invadir
-     el área de contenido como antes — así nunca se superpone con el
-     texto del informe, en ninguna página. */
+  /* Encabezado repetido en cada hoja impresa. Antes se usaba
+     position:fixed, pero en la paginación de Chrome un elemento fijo no
+     se recoloca de forma fiable página a página (con top negativo llegó
+     a aparecer al final de la hoja en vez de arriba) — el resultado eran
+     letras superpuestas con el contenido. La técnica robusta y estándar
+     entre navegadores es usar un <thead> de tabla: el navegador SIEMPRE
+     repite el <thead> al inicio de cada página en la que la tabla se
+     divide, sin necesidad de posicionamiento manual. Ver la tabla
+     #print_report_wrapper en index.html. */
+  #print_report_wrapper {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #print_report_wrapper > thead {
+    display: table-header-group;
+  }
+
+  #print_report_wrapper td {
+    padding: 0;
+  }
+
+  /* La fila que contiene TODO el informe debe poder partirse libremente
+     entre páginas (la regla general de abajo evita el corte dentro de
+     un <tr>, pero aquí el <tr> es justamente todo el documento). */
+  #print_report_wrapper > tbody > tr {
+    page-break-inside: auto !important;
+  }
+
   #print_running_header {
     display: block !important;
-    position: fixed;
-    top: -1.4cm;
-    right: 0;
     text-align: right;
     font-style: italic;
     font-weight: 700;
@@ -245,11 +257,7 @@ code, pre, .font-mono {
     color: #1e293b;
     border-bottom: 1px solid #94a3b8;
     padding-bottom: 4px;
-    width: 100%;
-  }
-
-  #calculation_report_content {
-    margin-top: 0;
+    margin-bottom: 0.6cm;
   }
 
   .print-page-break {

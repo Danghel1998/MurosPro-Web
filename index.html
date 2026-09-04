@@ -31,9 +31,6 @@
 </head>
 <body class="min-h-screen flex flex-col bg-slate-100 text-slate-900 antialiased">
 
-  <!-- Encabezado repetido, visible solo al imprimir la Memoria de Cálculo -->
-  <div id="print_running_header">MEMORIA DE CÁLCULO<br>ESTRUCTURAL</div>
-
   <!-- ========================================================================= -->
   <!-- HEADER / BARRA SUPERIOR -->
   <!-- ========================================================================= -->
@@ -883,7 +880,16 @@
               <button id="btn_unit_tn" data-report-unit="Tn" class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 hover:bg-white transition">Tn</button>
             </div>
           </div>
-          <div id="calculation_report_content"></div>
+          <table id="print_report_wrapper">
+            <thead>
+              <tr><td>
+                <div id="print_running_header">MEMORIA DE CÁLCULO<br>ESTRUCTURAL</div>
+              </td></tr>
+            </thead>
+            <tbody>
+              <tr><td id="calculation_report_content"></td></tr>
+            </tbody>
+          </table>
         </div>
 
       </div>
