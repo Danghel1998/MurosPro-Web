@@ -2198,7 +2198,7 @@ export class AppUIController {
 
                 <!-- Etiquetas de cara -->
                 <text x="${(frontTopX + frontBotX) / 2 - 14}" y="${(topY + zapY) / 2}" font-size="10" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${(frontTopX + frontBotX) / 2 - 14} ${(topY + zapY) / 2})">Cara Exterior</text>
-                <text x="${backX + 14}" y="${(topY + zapY) / 2}" font-size="10" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${backX + 14} ${(topY + zapY) / 2})">Cara Interior</text>`;
+                <text x="${backX + 32}" y="${(topY + zapY) / 2}" font-size="10" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${backX + 32} ${(topY + zapY) / 2})">Cara Interior</text>`;
 
             if (isCi) {
               const barX = backX - 6;   // varilla continua: llega hasta la corona, gancho arriba y abajo
