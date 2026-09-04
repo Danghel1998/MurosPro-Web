@@ -124,6 +124,31 @@ export class WallRenderer3D {
     this._animating = false;
   }
 
+  /** Captura la vista 3D actual como PNG (data URL), para incrustarla en el
+   * Plano. Si el contenedor está oculto (otra pestaña principal activa,
+   * clientWidth/Height = 0), usa una resolución fija temporal solo para
+   * este render — de lo contrario el canvas quedaría en blanco. No usa
+   * preserveDrawingBuffer: toDataURL() se llama inmediatamente después de
+   * render(), en la misma tarea síncrona, lo cual sí captura el frame
+   * (el buffer no se descarta hasta el siguiente compuesto del navegador). */
+  captureSnapshot(width = 900, height = 700) {
+    const w = this.container.clientWidth, h = this.container.clientHeight;
+    const usesFallbackSize = w < 2 || h < 2;
+    if (usesFallbackSize) {
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(width, height);
+    }
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+    let dataUrl = '';
+    try {
+      dataUrl = this.renderer.domElement.toDataURL('image/png');
+    } catch (e) { /* contexto WebGL no disponible aún */ }
+    if (usesFallbackSize) this.resize();
+    return dataUrl;
+  }
+
   updateData(wallData, geoResults, structResults) {
     this.wallData = wallData;
     this.structResults = structResults;

@@ -298,6 +298,207 @@ code, pre, .font-mono {
   display: none;
 }
 
+#plano_sheet_content {
+  display: none;
+}
+
+/* =========================================================================
+   HOJA DE PLANO — generada bajo demanda por printPlanoSheet() en
+   uiController.js. Se imprime en A3 horizontal (ver #dynamic_page_style,
+   inyectado en ese mismo método), independiente del A4 vertical de la
+   Memoria de Cálculo.
+   ========================================================================= */
+@media print {
+  /* Oculta todo excepto la hoja de plano mientras se imprime (en vez de
+     reutilizar/editar las reglas de la Memoria, que están pensadas para
+     esa otra hoja). */
+  body.printing-plano * {
+    visibility: hidden !important;
+  }
+  body.printing-plano #plano_sheet_content,
+  body.printing-plano #plano_sheet_content * {
+    visibility: visible !important;
+  }
+  body.printing-plano #plano_sheet_content {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.plano-sheet {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1.5pt solid #0f172a;
+  display: flex;
+  font-family: 'Inter', sans-serif;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.plano-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 3mm;
+  padding: 3mm;
+  box-sizing: border-box;
+}
+
+.plano-panel {
+  border: 1pt solid #0f172a;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.plano-panel-img {
+  flex: 1;
+  min-height: 45mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2mm;
+  overflow: hidden;
+}
+.plano-panel-img img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.plano-panel-title {
+  background: #1e293b;
+  color: #ffffff;
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1.3mm 2.5mm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2mm;
+  white-space: nowrap;
+}
+
+.plano-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4mm;
+  height: 4mm;
+  min-width: 4mm;
+  border-radius: 50%;
+  border: 1pt solid #ffffff;
+  font-size: 6.5pt;
+  margin-right: 1.5mm;
+}
+
+.plano-scale {
+  font-weight: 400;
+  font-size: 6.5pt;
+  color: #cbd5e1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plano-panel-table {
+  grid-column: 1 / span 3;
+}
+
+.plano-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 6.8pt;
+}
+.plano-table th {
+  background: #f59e0b;
+  color: #ffffff;
+  padding: 1mm 1.8mm;
+  text-align: left;
+  border: 0.5pt solid #94a3b8;
+}
+.plano-table td {
+  padding: 0.8mm 1.8mm;
+  border: 0.5pt solid #cbd5e1;
+}
+.plano-table td.num {
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+}
+.plano-table-total td {
+  font-weight: 700;
+  background: #fef3c7;
+  text-align: right;
+}
+.plano-table-total td:first-child {
+  text-align: left;
+}
+
+.plano-titleblock {
+  width: 62mm;
+  min-width: 62mm;
+  border-left: 1.5pt solid #0f172a;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.plano-tb-brand {
+  font-size: 15pt;
+  font-weight: 800;
+  color: #4338ca;
+  text-align: center;
+  padding: 4mm 2mm;
+  border-bottom: 1pt solid #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.plano-tb-section {
+  border-bottom: 0.75pt solid #94a3b8;
+  padding: 1.8mm 3mm;
+}
+
+.plano-tb-row + .plano-tb-row {
+  margin-top: 1.5mm;
+}
+
+.plano-tb-row label {
+  display: block;
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.plano-tb-row span {
+  display: block;
+  font-size: 8pt;
+  font-weight: 600;
+  color: #0f172a;
+  margin-top: 0.3mm;
+  word-break: break-word;
+}
+
+.plano-tb-code {
+  margin-top: auto;
+  text-align: center;
+  font-size: 24pt;
+  font-weight: 800;
+  padding: 4mm;
+  border-top: 1.5pt solid #0f172a;
+  color: #0f172a;
+}
+
 /* =========================================================================
    MODO OSCURO
    Se activa agregando la clase "dark" al <html> (ver toggle en el header,

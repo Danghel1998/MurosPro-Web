@@ -114,6 +114,18 @@ export const DEFAULT_WALL_DATA = {
     fs_overturning_seismic: 1.50,
     fs_sliding_seismic: 1.25,
     code: 'E060',
+  },
+
+  // Datos del cajetín (rótulo) del Plano — puramente informativos, no
+  // afectan ningún cálculo.
+  plano: {
+    proyecto: '',
+    propietario: '',
+    ubicacion: '',
+    dibujado_por: 'Ing. Dan Oliden',
+    revisado_por: '',
+    escala: 'Como se indica',
+    codigo: 'E-01',
   }
 };
 

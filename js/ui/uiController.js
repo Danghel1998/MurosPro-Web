@@ -510,6 +510,11 @@ export class AppUIController {
       });
     }
 
+    const printPlanoBtn = document.getElementById('btn_print_plano');
+    if (printPlanoBtn) {
+      printPlanoBtn.addEventListener('click', () => this.printPlanoSheet());
+    }
+
     const exportImgBtn = document.getElementById('btn_export_png');
     if (exportImgBtn) {
       exportImgBtn.addEventListener('click', () => {
@@ -2767,5 +2772,122 @@ export class AppUIController {
         throwOnError: false
       });
     }
+  }
+
+  /** Genera y lanza la impresión de la hoja de "Plano" (A3 horizontal, con
+   * cotas, detalle de armado, cuadro de habilitación y cajetín) — una
+   * hoja independiente de la Memoria de Cálculo, que usa su propio tamaño
+   * de página (ver #dynamic_page_style) y su propia regla de impresión
+   * (.printing-plano en styles.css) para no interferir entre sí. */
+  printPlanoSheet() {
+    const container = document.getElementById('plano_sheet_content');
+    const pageStyle = document.getElementById('dynamic_page_style');
+    if (!container) return;
+
+    container.innerHTML = this._buildPlanoHtml();
+    if (pageStyle) pageStyle.textContent = '@page { size: A3 landscape; margin: 8mm; }';
+    document.body.classList.add('printing-plano');
+
+    const cleanup = () => {
+      document.body.classList.remove('printing-plano');
+      if (pageStyle) pageStyle.textContent = '';
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => window.print(), 50);
+  }
+
+  /** Arma el HTML de la hoja de plano: tres vistas (sección con cotas,
+   * detalle de armado, isométrico 3D) + el cuadro de habilitación de
+   * acero, más el cajetín con los datos de js/constants.js (wallData.plano,
+   * editables en la pestaña "Avanzado"). */
+  _buildPlanoHtml() {
+    const w = this.wallData;
+    const str = this.structResults;
+    const plano = w.plano || {};
+    const schedule = calculateRebarSchedule(w, str);
+
+    let imgGeometry = '', imgRebar = '', img3D = '';
+    try { imgGeometry = this.renderer.captureSnapshot('geometry', { zoom: 1, panX: 0, panY: 0 }); } catch (e) { /* no disponible */ }
+    try { imgRebar = this.renderer.captureSnapshot('rebar', { zoom: 1, panX: 0, panY: 0 }); } catch (e) { /* no disponible */ }
+    try {
+      const container3D = document.getElementById('canvas3d_container');
+      if (!this.renderer3D && container3D) {
+        this.renderer3D = new WallRenderer3D(container3D);
+        this._setupRebar3DLegendToggles();
+      }
+      if (this.renderer3D) {
+        this.renderer3D.updateData(this.wallData, this.geoResults, this.structResults);
+        img3D = this.renderer3D.captureSnapshot();
+      }
+    } catch (e) { /* 3D no disponible */ }
+
+    const now = new Date();
+    const fecha = `${now.toLocaleDateString('es-PE', { month: 'long' }).toUpperCase()} - ${now.getFullYear()}`;
+
+    const tbRow = (label, value) => `<div class="plano-tb-row"><label>${label}</label><span>${value || '—'}</span></div>`;
+
+    const scheduleRows = schedule.rows.map(r => `
+                <tr>
+                  <td>${r.mark}</td>
+                  <td>${r.element}</td>
+                  <td>${r.diameter_name}</td>
+                  <td class="num">${r.unitLength_m.toFixed(2)}</td>
+                  <td class="num">${r.quantity}</td>
+                  <td class="num">${r.totalLength_m.toFixed(1)}</td>
+                  <td class="num">${r.weight_kg.toFixed(1)}</td>
+                </tr>`).join('');
+
+    return `
+      <div class="plano-sheet">
+        <div class="plano-main">
+          <div class="plano-panel" style="grid-column:1; grid-row:1;">
+            <div class="plano-panel-img">${imgGeometry ? `<img src="${imgGeometry}" alt="Sección del muro">` : ''}</div>
+            <div class="plano-panel-title"><span><span class="plano-bubble">1</span>SECCIÓN DEL MURO CON COTAS</span><span class="plano-scale">ESC: ${plano.escala || 'Indicada'}</span></div>
+          </div>
+          <div class="plano-panel" style="grid-column:2; grid-row:1;">
+            <div class="plano-panel-img">${imgRebar ? `<img src="${imgRebar}" alt="Detalle de armado">` : ''}</div>
+            <div class="plano-panel-title"><span><span class="plano-bubble">2</span>DETALLE DE ARMADO</span><span class="plano-scale">ESC: ${plano.escala || 'Indicada'}</span></div>
+          </div>
+          <div class="plano-panel" style="grid-column:3; grid-row:1;">
+            <div class="plano-panel-img">${img3D ? `<img src="${img3D}" alt="Isométrico del armado">` : ''}</div>
+            <div class="plano-panel-title"><span><span class="plano-bubble">3</span>ISOMÉTRICO DEL ARMADO</span></div>
+          </div>
+          <div class="plano-panel plano-panel-table" style="grid-row:2;">
+            <div class="plano-panel-title"><span><span class="plano-bubble">4</span>CUADRO DE HABILITACIÓN DE ACERO</span><span class="plano-scale">Tramo de ${schedule.wallLength.toFixed(2)} m</span></div>
+            <table class="plano-table">
+              <thead><tr><th>Marca</th><th>Elemento</th><th>Ø</th><th>Long. unit. (m)</th><th>Cant.</th><th>Long. total (m)</th><th>Peso (kg)</th></tr></thead>
+              <tbody>${scheduleRows}
+                <tr class="plano-table-total"><td colspan="6">Peso total de acero</td><td>${schedule.totalWeight_kg.toFixed(1)} kg</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="plano-titleblock">
+          <div class="plano-tb-brand">MurosPro</div>
+          <div class="plano-tb-section">
+            ${tbRow('Dibujado por', plano.dibujado_por)}
+            ${tbRow('Revisado por', plano.revisado_por)}
+          </div>
+          <div class="plano-tb-section">
+            ${tbRow('Ubicación', plano.ubicacion)}
+          </div>
+          <div class="plano-tb-section">
+            ${tbRow('Propietario', plano.propietario)}
+          </div>
+          <div class="plano-tb-section">
+            ${tbRow('Nombre de proyecto', plano.proyecto)}
+          </div>
+          <div class="plano-tb-section">
+            ${tbRow('Nombre de plano', 'Muro de Contención en Voladizo')}
+          </div>
+          <div class="plano-tb-section">
+            ${tbRow('Fecha', fecha)}
+            ${tbRow('Escala', plano.escala)}
+          </div>
+          <div class="plano-tb-code">${plano.codigo || 'E-01'}</div>
+        </div>
+      </div>
+    `;
   }
 }
