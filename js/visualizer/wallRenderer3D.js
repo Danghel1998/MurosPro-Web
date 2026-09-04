@@ -34,7 +34,7 @@ export class WallRenderer3D {
     this._animating = false;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xeef2f7);
+    this.scene.background = new THREE.Color(0xffffff);
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.05, 100);
 
@@ -60,7 +60,8 @@ export class WallRenderer3D {
 
     this.concreteGroup = new THREE.Group();
     this.rebarGroup = new THREE.Group();
-    this.scene.add(this.concreteGroup, this.rebarGroup);
+    this.annotationGroup = new THREE.Group();
+    this.scene.add(this.concreteGroup, this.rebarGroup, this.annotationGroup);
 
     // Subgrupos por tipo de acero, para poder mostrar/ocultar cada uno
     // desde la leyenda (checkboxes) sin reconstruir toda la geometría.
@@ -86,6 +87,7 @@ export class WallRenderer3D {
     window.removeEventListener('resize', this._onResize);
     this._clearGroup(this.concreteGroup);
     this._clearGroup(this.rebarGroup);
+    this._clearGroup(this.annotationGroup);
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement) {
       this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
@@ -154,9 +156,11 @@ export class WallRenderer3D {
     this.structResults = structResults;
     if (!wallData || !structResults) return;
     this._clearGroup(this.concreteGroup);
+    this._clearGroup(this.annotationGroup);
     Object.values(this.rebarSubgroups).forEach((g) => this._clearGroup(g));
     this._buildConcrete(wallData);
     this._buildRebar(wallData, structResults);
+    this._buildAnnotations(wallData, structResults);
     this._fitCamera(wallData.geometry);
   }
 
@@ -164,6 +168,7 @@ export class WallRenderer3D {
     while (group.children.length) {
       const obj = group.children.pop();
       obj.geometry?.dispose();
+      obj.material?.map?.dispose();
       obj.material?.dispose();
     }
   }
@@ -459,16 +464,163 @@ export class WallRenderer3D {
     }
   }
 
+  /** Crea una etiqueta de texto (uno o varios renglones) como sprite —
+   * siempre mira a la cámara, sin importar cómo se orbite la vista. La
+   * altura real (en metros) de cada renglón se fija en `this._labelSize`
+   * (ver _buildAnnotations), para que el tamaño de letra sea proporcional
+   * al muro sin importar sus dimensiones. */
+  _makeTextSprite(lines, { color = '#0f172a', fontPx = 32, weight = 600, align = 'left' } = {}) {
+    const arr = Array.isArray(lines) ? lines : [lines];
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const font = `${weight} ${fontPx}px Inter, Arial, sans-serif`;
+    ctx.font = font;
+    const padding = 10;
+    const lineHeight = fontPx * 1.3;
+    const maxWidth = Math.max(1, ...arr.map((l) => ctx.measureText(l).width));
+    canvas.width = Math.ceil(maxWidth) + padding * 2;
+    canvas.height = Math.ceil(lineHeight * arr.length) + padding * 2;
+    // Redimensionar el canvas resetea el contexto: hay que reaplicar el font.
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = align;
+    const xPos = align === 'left' ? padding : align === 'right' ? canvas.width - padding : canvas.width / 2;
+    arr.forEach((l, i) => ctx.fillText(l, xPos, padding + i * lineHeight));
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+    const sprite = new THREE.Sprite(material);
+    sprite.renderOrder = 999;
+    const worldPerPx = (this._labelSize || 0.14) / lineHeight;
+    sprite.scale.set(canvas.width * worldPerPx, canvas.height * worldPerPx, 1);
+    // El pivote por defecto es el centro del sprite; para las etiquetas con
+    // texto a la izquierda o derecha de un punto de anclaje, conviene que
+    // ese punto quede en el borde del sprite en vez de en su centro.
+    if (align === 'left') sprite.center.set(0, 0.5);
+    if (align === 'right') sprite.center.set(1, 0.5);
+    return sprite;
+  }
+
+  /** Línea de cota con líneas de extensión, puntos en los extremos y el
+   * valor centrado sobre ella — `extDir` es la dirección (unitaria) en la
+   * que se desplaza la línea de cota respecto a los puntos reales p1/p2. */
+  _addDimension(p1, p2, text, extDir, extLen) {
+    const group = this.annotationGroup;
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x1e293b });
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+    const dotGeo = new THREE.SphereGeometry((this._labelSize || 0.14) * 0.09, 8, 8);
+    const e1 = p1.clone().addScaledVector(extDir, extLen);
+    const e2 = p2.clone().addScaledVector(extDir, extLen);
+    const mkLine = (a, b) => group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), lineMat));
+    mkLine(p1, e1);
+    mkLine(p2, e2);
+    mkLine(e1, e2);
+    [e1, e2].forEach((p) => {
+      const dot = new THREE.Mesh(dotGeo, dotMat);
+      dot.position.copy(p);
+      group.add(dot);
+    });
+    const mid = e1.clone().add(e2).multiplyScalar(0.5);
+    const sprite = this._makeTextSprite(text, { fontPx: 34, weight: 700, align: 'center' });
+    sprite.position.copy(mid);
+    group.add(sprite);
+  }
+
+  /** Etiqueta con línea directriz (leader) desde un punto sobre una
+   * varilla (`anchor`) hasta la posición del texto (`labelPos`), con un
+   * punto en el ancla — igual convención que un plano de despiece. */
+  _addLeaderLabel(anchor, labelPos, textLines) {
+    const group = this.annotationGroup;
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x475569 });
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([anchor, labelPos]), lineMat));
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry((this._labelSize || 0.14) * 0.09, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x475569 })
+    );
+    dot.position.copy(anchor);
+    group.add(dot);
+    const sprite = this._makeTextSprite(textLines, { fontPx: 28, align: 'left' });
+    sprite.position.copy(labelPos);
+    group.add(sprite);
+  }
+
+  /** Cotas generales (H, hp, hz, B) y etiquetas con línea directriz para
+   * cada tipo de acero presente, con el mismo diámetro/espaciamiento que
+   * ya se calculó y se muestra en la Memoria — no son valores nuevos,
+   * solo se anota en 3D lo que el motor estructural ya definió. */
+  _buildAnnotations(w, str) {
+    const geo = w.geometry, mats = w.materials;
+    const H = geo.H, hz = geo.hz, B = geo.B, B_toe = geo.B_toe, b_bot = geo.b_bot, b_top = geo.b_top;
+    const B_heel = Math.max(0, B - B_toe - b_bot);
+    const H_stem = Math.max(0.001, H - hz);
+    const depth = this._stripDepth(geo);
+    const zFront = depth / 2;
+    const maxDim = Math.max(H, B);
+    this._labelSize = maxDim * 0.024;
+
+    const coverStem = mats.cover_stem ?? 0.04;
+    const coverFoot = mats.cover_footing ?? 0.075;
+    const xBack = B_toe + b_bot - coverStem;
+    const xFrontAt = (y) => B_toe + (b_bot - b_top) * ((y - hz) / H_stem) + coverStem;
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+    // --- Cotas generales: hz y hp apiladas junto al muro, H (total) más
+    // afuera, y B debajo de la zapata — como en un plano de encofrado.
+    const left = -0.07 * maxDim;
+    this._addDimension(V(0, 0, zFront), V(0, hz, zFront), hz.toFixed(2), V(-1, 0, 0), Math.abs(left));
+    this._addDimension(V(0, hz, zFront), V(0, H, zFront), H_stem.toFixed(2), V(-1, 0, 0), Math.abs(left) + 0.10 * maxDim);
+    this._addDimension(V(0, 0, zFront), V(0, H, zFront), H.toFixed(2), V(-1, 0, 0), Math.abs(left) + 0.22 * maxDim);
+    this._addDimension(V(0, 0, zFront), V(B, 0, zFront), B.toFixed(2), V(0, -1, 0), 0.12 * maxDim);
+
+    // --- Etiquetas de acero, en columna a la derecha del muro ---
+    const labels = [];
+    labels.push([V(xBack, hz + H_stem * 0.6, zFront),
+      [`Refuerzo Vertical (int.) ${str.stem.rebar.name}`, `@ ${str.stem.spacing} cm`]]);
+    labels.push([V(xBack, hz + Math.min(H_stem, str.stem.Lc_usar) * 0.5, zFront),
+      [`Refuerzo Vertical (int.), tramo 2`, `${str.stem.rebar.name} @ ${str.stem.spacing_z2} cm`]]);
+    labels.push([V(xFrontAt(hz + H_stem * 0.5), hz + H_stem * 0.5, zFront),
+      [`Refuerzo Vertical (ext.) ${str.stem.rebarTemp.name}`, `@ ${str.stem.spacing_vert_ext_inferior} cm`]]);
+    labels.push([V(xFrontAt(hz + H_stem * 0.25) + 0.05, hz + H_stem * 0.25, zFront),
+      [`Refuerzo Horizontal ${str.stem.rebarTemp.name}`, `@ ${str.stem.sp_ce_inferior} cm`]]);
+    labels.push([V(coverFoot + 0.15, coverFoot, zFront),
+      [`Refuerzo Zapata (punta) ${str.toe.rebar.name}`, `@ ${str.toe.spacing} cm`]]);
+    if (B_heel > 0.01) {
+      labels.push([V(B - coverFoot - 0.15, hz - coverFoot, zFront),
+        [`Refuerzo Zapata (talón) ${str.heel.rebar.name}`, `@ ${str.heel.spacing} cm`]]);
+    }
+    labels.push([V(B * 0.5, coverFoot * 2, zFront),
+      [`Transversal de Reparto ${str.toe.rebarTemp.name}`, `@ ${str.toe.spacing_trans} cm`]]);
+    if (geo.has_key && geo.key_depth > 0 && geo.key_width > 0) {
+      labels.push([V(geo.key_pos + geo.key_width / 2, -geo.key_depth * 0.6, zFront),
+        [`Dentellón — Estribo Ø 3/4"`, `@ 15 cm`]]);
+    }
+
+    const labelX = B + 0.30 * maxDim;
+    const top = H * 0.95;
+    const step = labels.length > 1 ? (H * 0.9) / (labels.length - 1) : 0;
+    labels.forEach(([anchor, text], i) => {
+      const labelPos = V(labelX, Math.max(0.05 * H, top - i * step), zFront + 0.06 * maxDim);
+      this._addLeaderLabel(anchor, labelPos, text);
+    });
+  }
+
   _fitCamera(geometry) {
     const H = geometry.H, B = geometry.B;
     const depth = this._stripDepth(geometry);
-    const target = new THREE.Vector3(B / 2, H / 2.4, 0);
+    // El encuadre debe incluir también las cotas (a la izquierda) y las
+    // etiquetas de acero (a la derecha), no solo el sólido del muro.
+    const maxDim = Math.max(H, B);
+    const leftExtent = 0.30 * maxDim;
+    const rightExtent = B + 0.30 * maxDim + 0.9; // + ancho aprox. del texto de las etiquetas
+    const target = new THREE.Vector3((rightExtent - leftExtent) / 2, H / 2.3, 0);
     this.controls.target.copy(target);
     // Ángulo fijo (no depende del aspecto H/B/depth) para que el encuadre
     // inicial siempre sea una vista en 3/4 razonable, aunque el muro sea
     // mucho más alto que profundo (la franja representativa es angosta).
-    const maxDim = Math.max(H, B, depth);
-    const distance = maxDim * 1.9;
+    const span = Math.max(rightExtent - leftExtent, H * 1.3, depth);
+    const distance = span * 1.55;
     const azimuth = THREE.MathUtils.degToRad(35);
     const elevation = THREE.MathUtils.degToRad(22);
     this.camera.position.set(
