@@ -168,7 +168,15 @@ code, pre, .font-mono {
 @media print {
   @page {
     size: A4;
-    margin: 2.2cm 1.8cm 1.8cm 1.8cm;
+    /* El margen superior reserva espacio para el encabezado repetido
+       (#print_running_header) en TODAS las páginas. Antes ese espacio se
+       lograba con un margin-top en #calculation_report_content, pero el
+       margin de una caja solo se aplica una vez (antes de su primer
+       fragmento) — en la página 2 en adelante el contenido volvía a
+       arrancar en el borde superior del área de impresión y quedaba
+       debajo del encabezado fijo, superponiendo las letras. Al reservar
+       el espacio en el margen de @page, cada página lo respeta por igual. */
+    margin: 3.6cm 1.8cm 1.8cm 1.8cm;
   }
 
   html, body {
@@ -219,11 +227,15 @@ code, pre, .font-mono {
   }
 
   /* Encabezado repetido en cada hoja impresa (posición fija = se repite
-     en cada página al imprimir en la mayoría de los navegadores) */
+     en cada página al imprimir en la mayoría de los navegadores). Se
+     ubica con un "top" negativo para que quede DENTRO del margen superior
+     reservado en @page (arriba del área de contenido), en vez de invadir
+     el área de contenido como antes — así nunca se superpone con el
+     texto del informe, en ninguna página. */
   #print_running_header {
     display: block !important;
     position: fixed;
-    top: 0;
+    top: -1.4cm;
     right: 0;
     text-align: right;
     font-style: italic;
@@ -237,7 +249,7 @@ code, pre, .font-mono {
   }
 
   #calculation_report_content {
-    margin-top: 1.4cm;
+    margin-top: 0;
   }
 
   .print-page-break {

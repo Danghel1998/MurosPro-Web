@@ -1004,6 +1004,13 @@ export class AppUIController {
     const reportContainer = document.getElementById('calculation_report_content');
     if (!reportContainer) return;
 
+    // Reemplazar innerHTML del informe (p.ej. al hacer zoom/pan/bloquear un
+    // esquema) hace que el navegador pierda la posición de scroll del panel
+    // contenedor y salte arriba — se guarda y restaura para que el usuario
+    // no pierda su lugar en la página cada vez que interactúa con un gráfico.
+    const reportPanelEl = document.getElementById('report_panel');
+    const savedScrollTop = reportPanelEl ? reportPanelEl.scrollTop : null;
+
     const geo = this.geoResults;
     const str = this.structResults;
     const w = this.wallData;
@@ -2716,6 +2723,13 @@ export class AppUIController {
     `;
 
     reportContainer.innerHTML = this.reportUnit === 'Tn' ? this.convertReportUnitsToTn(reportHtml) : reportHtml;
+
+    // Restaurar el scroll guardado al principio de la función (ver
+    // comentario junto a `savedScrollTop`), ahora que el nuevo HTML ya está
+    // en el DOM y el panel tiene su nueva altura.
+    if (reportPanelEl && savedScrollTop !== null) {
+      reportPanelEl.scrollTop = savedScrollTop;
+    }
 
     // Los selectores de varilla y los campos de espaciamiento editable
     // insertados dentro del informe (p.ej. en los bloques "Varilla a usar" /
