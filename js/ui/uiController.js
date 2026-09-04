@@ -2404,7 +2404,7 @@ export class AppUIController {
                   <line x1="${frontTopX - 15}" y1="${topY}" x2="${backX + 15}" y2="${topY}" stroke="#0f172a" stroke-width="1.5"/>
                   <path d="M ${(frontTopX + backX) / 2 - 10} ${topY} l 6,-6 l 8,12 l 6,-6" fill="none" stroke="#0f172a" stroke-width="1.5"/>
                   <text x="${(frontTopX + backX) / 2 - 34}" y="${(topY + zapY) / 2}" font-size="9.5" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${(frontTopX + backX) / 2 - 34} ${(topY + zapY) / 2})">Cara Exterior</text>
-                  <text x="${backX - 20}" y="${(topY + zapY) / 2}" font-size="9.5" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${backX - 20} ${(topY + zapY) / 2})">Cara Interior</text>
+                  <text x="${backX + 32}" y="${(topY + zapY) / 2}" font-size="9.5" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${backX + 32} ${(topY + zapY) / 2})">Cara Interior</text>
                   ${dotsCol((frontTopX + frontBotX) / 2 + 18)}
                   ${dotsCol(backX - 12)}
                 </svg>`;
@@ -2458,7 +2458,7 @@ export class AppUIController {
                   <!-- Quiebre abajo: viene cortado de la parte media -->
                   <path d="M ${frontBotX - 14} ${botY} L ${(frontBotX + backX) / 2 - 8} ${botY} l 6,-6 l 8,12 l 6,-6 L ${backX + 14} ${botY}" fill="none" stroke="#0f172a" stroke-width="1.5"/>
                   <text x="${(frontTopX + backX) / 2 - 28}" y="${(topY + botY) / 2}" font-size="9.5" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${(frontTopX + backX) / 2 - 28} ${(topY + botY) / 2})">Cara Exterior</text>
-                  <text x="${backX - 18}" y="${(topY + botY) / 2}" font-size="9.5" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${backX - 18} ${(topY + botY) / 2})">Cara Interior</text>
+                  <text x="${backX + 28}" y="${(topY + botY) / 2}" font-size="9.5" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 ${backX + 28} ${(topY + botY) / 2})">Cara Interior</text>
                   ${dotsCol((frontTopX + frontBotX) / 2 + 14)}
                   ${dotsCol(backX - 12)}
                 </svg>`;
