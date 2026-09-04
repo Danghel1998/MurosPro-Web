@@ -176,6 +176,17 @@ code, pre, .font-mono {
     color: #000000 !important;
   }
 
+  /* Por defecto Chrome/Edge NO imprimen colores de fondo (para ahorrar
+     tinta) salvo que el usuario active "Gráficos de fondo" en el diálogo
+     de impresión. Esto forzaba a blanco las cabeceras naranjas de las
+     tablas y los títulos resaltados (bg-amber-*) de cada cuadro, sin
+     depender de esa casilla. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
   header,
   aside,
   .no-print,
