@@ -1336,7 +1336,16 @@ export class AppUIController {
                 </tr>
               </thead>
               <tbody class="text-slate-700">
-                ${[...geo.weights].sort((a, b) => (a.material === 'Concreto' ? 0 : 1) - (b.material === 'Concreto' ? 0 : 1)).map(wt => `
+                ${(() => {
+                  // El dentellón (W7) no se muestra en este cuadro de
+                  // predimensionamiento: su peso solo se usa para el
+                  // chequeo de deslizamiento, no para este desglose de
+                  // fuerzas verticales y momentos.
+                  const tableWeights = geo.weights.filter(wt => wt.id !== 'W7');
+                  const tableTotalKg = tableWeights.reduce((s, wt) => s + wt.weight_kg, 0);
+                  const tableTotalMRKg = tableWeights.reduce((s, wt) => s + (wt.moment * 1000) / 9.80665, 0);
+                  return `
+                ${[...tableWeights].sort((a, b) => (a.material === 'Concreto' ? 0 : 1) - (b.material === 'Concreto' ? 0 : 1)).map(wt => `
                 <tr class="border-t border-slate-100">
                   <td class="py-1.5 px-2.5 font-bold">${wt.id}</td>
                   <td class="py-1.5 px-2.5">${wt.name.replace(/^W\d:\s*/, '')} <span class="text-slate-400 block text-[10px]">${wt.description}</span></td>
@@ -1350,10 +1359,11 @@ export class AppUIController {
                 </tr>`).join('')}
                 <tr class="border-t border-slate-200 bg-amber-50 font-bold">
                   <td class="py-1.5 px-2.5" colspan="6">Σ Fv / Σ MFv</td>
-                  <td class="py-1.5 px-2.5 text-right font-mono">${totalKg.toFixed(1)} kg</td>
+                  <td class="py-1.5 px-2.5 text-right font-mono">${tableTotalKg.toFixed(1)} kg</td>
                   <td class="py-1.5 px-2.5"></td>
-                  <td class="py-1.5 px-2.5 text-right font-mono">${totalMRKg.toFixed(1)} kg·m</td>
-                </tr>
+                  <td class="py-1.5 px-2.5 text-right font-mono">${tableTotalMRKg.toFixed(1)} kg·m</td>
+                </tr>`;
+                })()}
               </tbody>
             </table>
           </div>
