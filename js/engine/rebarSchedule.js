@@ -6,6 +6,8 @@
  * cm²/m) y no conoce esa longitud, así que este cálculo vive aparte.
  */
 
+import { REBAR_TABLE } from '../constants.js';
+
 const hookAllow = (diameter_m) => Math.max(0.10, diameter_m * 12.0);
 
 function row(mark, element, rebar, shape, unitLength_m, quantity) {
@@ -107,6 +109,24 @@ export function calculateRebarSchedule(wallData, structResults) {
       rows.push(row(nextMark(), 'Zapata — Transversal de reparto (talón)', dbTrans, 'straight',
         wallLength, B_heel / (heel.spacing_trans / 100)));
     }
+  }
+
+  // --- Dentellón / Tacón, si está habilitado: estribo vertical en U que
+  // envuelve su sección (mismo criterio fijo de la leyenda del Detalle
+  // 3D: Ø 3/4" @ 15 cm) + acero horizontal corrido dentro de su altura,
+  // con el mismo diámetro/espaciamiento del transversal de reparto de la
+  // zapata. El dentellón se diseña por empuje pasivo, no por flexión, así
+  // que no tiene un cálculo de As propio — se usa acero nominal fijo.
+  if (geo.has_key && geo.key_depth > 0 && geo.key_width > 0) {
+    const dbVert = REBAR_TABLE.find(r => r.inches === '3/4"');
+    const spacingVert_cm = 15;
+    const hookVert = hookAllow(dbVert.diameter_m);
+    rows.push(row(nextMark(), 'Dentellón — Estribo vertical (U)', dbVert, 'hooks-both',
+      2 * geo.key_depth + geo.key_width + 2 * hookVert, wallLength / (spacingVert_cm / 100)));
+
+    const dbHoriz = toe.rebarTemp;
+    rows.push(row(nextMark(), 'Dentellón — Acero horizontal corrido', dbHoriz, 'straight',
+      wallLength, geo.key_depth / (toe.spacing_trans / 100)));
   }
 
   const totalWeight_kg = rows.reduce((sum, r) => sum + r.weight_kg, 0);
