@@ -1134,7 +1134,7 @@ export class AppUIController {
         </section>
 
         <!-- 1. Predimensionamiento -->
-        <section class="avoid-break">
+        <section>
           <h3 class="text-base font-bold text-indigo-900 border-b border-indigo-100 pb-1 mb-2">1. Predimensionamiento del Muro</h3>
           <p class="text-xs text-slate-600 mb-2 text-justify">
             Se muestran los datos necesarios para el predimensionamiento, así como el
@@ -1198,13 +1198,13 @@ export class AppUIController {
             </table>
           </div>
           ${this.zoomControlsHtml('predim')}
-          <div class="flex justify-center bg-slate-50 border border-slate-200 rounded-lg p-2">
+          <div class="flex justify-center bg-slate-50 border border-slate-200 rounded-lg p-2 avoid-break">
             <img src="${canvasSnapshot}" alt="Esquema del muro" data-report-key="predim" class="max-w-full report-diagram-img cursor-grab active:cursor-grabbing" style="max-height: 420px;">
           </div>
         </section>
 
         <!-- 1.1 Dimensionamiento y verificación por corte en la base de la pantalla -->
-        <section class="avoid-break">
+        <section>
           <h3 class="text-base font-bold text-indigo-900 border-b border-indigo-100 pb-1 mb-2">2.1. Dimensionamiento y Verificación por Corte en la Base de la Pantalla</h3>
           <p class="text-xs text-slate-600 mb-2 text-justify">
             Se muestra el dimensionamiento de la base de la pantalla a partir del momento último
@@ -1300,7 +1300,7 @@ export class AppUIController {
         </section>
 
         <!-- 2.2 Cálculo de Fuerzas -->
-        <section class="avoid-break">
+        <section>
           <h3 class="text-base font-bold text-indigo-900 border-b border-indigo-100 pb-1 mb-2">2.2. Cálculo de Fuerzas</h3>
           <p class="text-xs text-slate-600 mb-2 text-justify">
             En el presente ítem se muestra el cálculo de las diferentes fuerzas actuantes en la
@@ -1359,7 +1359,7 @@ export class AppUIController {
 
           ${canvasSnapshotForces ? `
           ${this.zoomControlsHtml('forces')}
-          <div class="flex justify-center bg-slate-50 border border-slate-200 rounded-lg p-2 mb-3">
+          <div class="flex justify-center bg-slate-50 border border-slate-200 rounded-lg p-2 mb-3 avoid-break">
             <img src="${canvasSnapshotForces}" alt="Diagrama de fuerzas verticales" data-report-key="forces" class="max-w-full report-diagram-img cursor-grab active:cursor-grabbing" style="max-height: 380px;">
           </div>` : ''}
 
@@ -1422,7 +1422,7 @@ export class AppUIController {
 
           ${canvasSnapshotPressuresEa ? `
           ${this.zoomControlsHtml('pressures_ea')}
-          <div class="flex justify-center bg-slate-50 border border-slate-200 rounded-lg p-2 mt-3">
+          <div class="flex justify-center bg-slate-50 border border-slate-200 rounded-lg p-2 mt-3 avoid-break">
             <img src="${canvasSnapshotPressuresEa}" alt="Diagrama de empujes laterales" data-report-key="pressures_ea" class="max-w-full report-diagram-img cursor-grab active:cursor-grabbing" style="max-height: 380px;">
           </div>` : ''}
         </section>
@@ -1813,7 +1813,7 @@ export class AppUIController {
                 </div>`;
 
               return `
-            <div class="p-3 rounded-lg border ${str.toe.pass_shear && str.heel.pass_shear && str.stem.pass_shear ? 'bg-emerald-50/40 border-emerald-200' : 'bg-rose-50/40 border-rose-200'} avoid-break">
+            <div class="p-3 rounded-lg border ${str.toe.pass_shear && str.heel.pass_shear && str.stem.pass_shear ? 'bg-emerald-50/40 border-emerald-200' : 'bg-rose-50/40 border-rose-200'}">
               <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">D. Cálculo de Momentos Flectores y Fuerzas Cortantes</h4>
               <p class="text-[11px] text-slate-500 mb-2">
                 Se evalúa el momento y el cortante producidos por las fuerzas que actúan sobre cada tramo de la
@@ -1870,7 +1870,7 @@ export class AppUIController {
                   <text x="${x + side * 12}" y="${(y1p + y2p) / 2 + 4}" font-size="12" font-weight="700" fill="#4338ca" text-anchor="${side > 0 ? 'start' : 'end'}">${label}</text>`;
 
                 return `
-              <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-3">
+              <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-3 avoid-break">
                 <svg viewBox="0 0 ${W} ${Hs}" style="max-width:320px; width:100%;">
                   <!-- Contorno de la pantalla -->
                   <polygon points="${frontTopX},${topY} ${backX},${topY} ${backX},${botY} ${frontBotX},${botY}"
@@ -1947,7 +1947,7 @@ export class AppUIController {
                     <polygon points="${tx - 3},${ry1 + 4} ${tx + 3},${ry1 + 4} ${tx},${ry1}" fill="#7c2d12"/>`;
                 }
                 return `
-              <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-3">
+              <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-3 avoid-break">
                 <svg viewBox="0 0 ${Wpx} ${Hpx}" style="max-width:420px; width:100%;">
                   <rect x="${rx0}" y="${ry0}" width="${rx1 - rx0}" height="${ry1 - ry0}" fill="#e2e8f0" stroke="#0f172a" stroke-width="2"/>
                   <text x="${(rx0 + rx1) / 2}" y="${(ry0 + ry1) / 2 + 4}" font-size="11" font-weight="700" fill="#334155" text-anchor="middle">Punta</text>
@@ -2017,7 +2017,7 @@ export class AppUIController {
                     <polygon points="${tx - 3},${ry1 + 4} ${tx + 3},${ry1 + 4} ${tx},${ry1}" fill="#7c2d12"/>`;
                 }
                 return `
-              <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-3">
+              <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-3 avoid-break">
                 <svg viewBox="0 0 ${Wpx} ${Hpx}" style="max-width:420px; width:100%;">
                   <!-- Vástago (referencia) -->
                   <rect x="${rx0 - 18}" y="${ry0 - 30}" width="18" height="${ry0 - (ry0 - 30) + (ry1 - ry0)}" fill="#cbd5e1" stroke="#0f172a" stroke-width="1.5"/>
@@ -2244,14 +2244,14 @@ export class AppUIController {
 
           return `
         <!-- 2.4 Cálculo de Acero -->
-        <section class="avoid-break">
+        <section>
           <h3 class="text-base font-bold text-indigo-900 border-b border-indigo-100 pb-1 mb-2">2.4. Cálculo de Acero</h3>
           <p class="text-xs text-slate-600 mb-2 text-justify">
             A continuación, se procede a calcular el acero de refuerzo tanto en la pantalla como en la
             zapata del muro de contención.
           </p>
 
-          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3 avoid-break">
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3">
             <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">A. Cálculo de Acero Vertical en Cara Interior (Asv<sub>ci</sub>)</h4>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs mb-2">
               <table class="w-full border border-slate-200 rounded overflow-hidden self-start">
@@ -2361,7 +2361,7 @@ export class AppUIController {
             </div>
           </div>
 
-          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3 avoid-break">
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3">
             <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">C. Cálculo de Acero Horizontal (Ash)</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-3">
               <div class="p-2 bg-amber-50 rounded border border-amber-300 flex items-center justify-center gap-2 font-bold">Diámetro del refuerzo: ${rebarSelectHtml('rebar_temp_id')}</div>
@@ -2369,7 +2369,7 @@ export class AppUIController {
             </div>
 
             <p class="text-center font-bold text-slate-700 bg-slate-100 rounded py-1 mb-2 text-xs">De la base hasta la parte media</p>
-            <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-2">
+            <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-2 avoid-break">
               ${(() => {
                 const Wpx = 260, Hpx = 220;
                 const zapY = 160, zapBotY = 190, topY = 20;
@@ -2418,7 +2418,7 @@ export class AppUIController {
             </div>
 
             <p class="text-center font-bold text-slate-700 bg-slate-100 rounded py-1 mb-2 text-xs">De la parte media hasta la corona</p>
-            <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-2">
+            <div class="flex justify-center bg-white border border-slate-200 rounded-lg p-2 mb-2 avoid-break">
               ${(() => {
                 // Solo la porción superior del vástago (de la parte media a
                 // la corona): quiebre abajo (viene cortado de la parte
@@ -2631,7 +2631,7 @@ export class AppUIController {
 
             const schedule = calculateRebarSchedule(w, str);
             return `
-          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3 avoid-break">
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/40 mb-3">
             <h4 class="font-bold text-slate-900 mb-2 bg-amber-100 px-2 py-1 rounded">G. Cuadro de Habilitación de Acero</h4>
             <p class="text-[11px] text-slate-500 mb-2">
               Lista de habilitación para un tramo de muro de <strong>${schedule.wallLength.toFixed(2)} m</strong> de
