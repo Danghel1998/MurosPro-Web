@@ -785,7 +785,11 @@ export class AppUIController {
     const tbodyWeights = document.getElementById('table_weights_tbody');
     if (tbodyWeights) {
       tbodyWeights.innerHTML = '';
-      geo.weights.forEach(w => {
+      // El dentellón (W7) no se muestra en este cuadro: su peso solo se
+      // usa para el chequeo de deslizamiento, no para este desglose de
+      // fuerzas verticales y momentos (igual que en la Memoria de Cálculo).
+      const tableWeights = geo.weights.filter(w => w.id !== 'W7');
+      tableWeights.forEach(w => {
         const row = document.createElement('tr');
         row.className = 'border-b border-slate-100 hover:bg-slate-50 text-xs';
         row.innerHTML = `
@@ -797,8 +801,8 @@ export class AppUIController {
         tbodyWeights.appendChild(row);
       });
 
-      const totalKg = (geo.sum_N * 1000) / 9.80665;
-      const totalMomKg = (geo.sum_MR * 1000) / 9.80665;
+      const totalKg = tableWeights.reduce((s, w) => s + (w.weight_kg !== undefined ? w.weight_kg : (w.weight * 1000) / 9.80665), 0);
+      const totalMomKg = tableWeights.reduce((s, w) => s + (w.moment * 1000) / 9.80665, 0);
       document.getElementById('total_weight_n').innerHTML = `${totalKg.toFixed(1)} kg`;
       document.getElementById('total_moment_mr').innerHTML = `${totalMomKg.toFixed(1)} kg·m`;
     }
